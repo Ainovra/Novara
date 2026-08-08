@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Novara</title>
+<link rel="stylesheet" href="/static/style.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+</head>
+<body>
+
+<!-- Splash / opening animation -->
+<div class="splash" id="splash">
+  <div class="splash-mark">Novara</div>
+</div>
+
+<div class="app">
+
+  <!-- Sidebar -->
+  <aside class="sidebar" id="sidebar">
+    <div class="brand">
+      <span class="brand-mark-sm">Novara</span>
+      <button class="icon-btn" id="closeSidebar" aria-label="Close sidebar">✕</button>
+    </div>
+
+    <button class="new-chat-btn" id="newChatBtn">
+      <span class="plus">+</span> New chat
+    </button>
+
+    <div class="conv-section">
+      <div class="conv-list" id="convList">
+        <div class="empty-hint">Koi conversation nahi hai abhi</div>
+      </div>
+    </div>
+
+    <div class="sidebar-footer">
+      <div class="user-row">
+        <div class="avatar">{{ username[0]|upper if username else "N" }}</div>
+        <span class="username-label">{{ username }}</span>
+      </div>
+      <div class="footer-actions">
+        <button class="icon-btn" id="themeToggle" title="Toggle theme">🌙</button>
+        <a href="/logout" class="icon-btn logout-btn" title="Logout">⏻</a>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Main chat -->
+  <main class="main">
+    <header class="topbar">
+      <button class="icon-btn" id="openSidebar" aria-label="Open sidebar">☰</button>
+      <span class="topbar-title">Novara</span>
+      <button class="icon-btn" id="themeToggleMobile" title="Toggle theme">🌙</button>
+    </header>
+
+    <div class="chat-area" id="chatArea">
+      <div class="welcome" id="welcome">
+        <div class="welcome-mark">Novara</div>
+        <p>Poocho kuch bhi — text, photo, PDF, ya awaaz se.</p>
+      </div>
+    </div>
+
+    <div class="input-bar">
+      <div class="attach-preview" id="attachPreview" style="display:none;"></div>
+      <div class="input-wrap">
+        <button class="icon-btn attach-btn" id="attachBtn" title="Attach file">📎</button>
+        <input type="file" id="fileInput" accept="image/*,video/*,.pdf" hidden>
+        <textarea id="messageInput" placeholder="Message Novara…" rows="1"></textarea>
+        <button class="icon-btn mic-btn" id="micBtn" title="Speech to text">🎤</button>
+        <button id="sendBtn" class="send-btn" aria-label="Send">➤</button>
+      </div>
+    </div>
+  </main>
+
+</div>
+
+<script src="/static/script.js"></script>
+</body>
+</html>
