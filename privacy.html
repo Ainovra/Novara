@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Novara — Privacy Policy</title>
+<link rel="stylesheet" href="/static/style.css">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+</head>
+<body class="share-body">
+<header class="share-header">
+  <a href="/" class="brand-mark-sm" style="text-decoration:none;">Novara</a>
+  <a href="/terms" class="share-cta">Terms &amp; Conditions →</a>
+</header>
+
+<div class="share-wrap policy-wrap">
+  <h1 class="share-title">Privacy Policy</h1>
+  <p class="share-note">Last updated: {{ last_updated }}</p>
+
+  <div class="policy-body">
+    <p>This Privacy Policy explains what information Novara ("we", "our", "the app") collects, how it's used, and the choices you have. By using Novara, you agree to this policy.</p>
+
+    <h2>1. Information we collect</h2>
+    <p><strong>Account information.</strong> When you sign up we collect a username and password (stored as a secure hash, never in plain text), or if you use "Continue with Google," we receive your name, email address, and Google account ID from Google.</p>
+    <p><strong>Content you provide.</strong> The messages you send, files you attach (images, PDFs, videos), and any prompts you use for video generation/editing are stored so your conversation history is available when you come back.</p>
+    <p><strong>Voice input.</strong> If you use the microphone button, your speech is converted to text directly by your browser/device — audio is not uploaded to or stored on our servers.</p>
+    <p><strong>Technical information.</strong> We use a session cookie to keep you logged in. We do not use advertising trackers or sell data to advertisers.</p>
+
+    <h2>2. How we use your information</h2>
+    <ul>
+      <li>To operate your account and show you your past conversations</li>
+      <li>To generate AI responses (your message and relevant context are sent to Google's Gemini API to produce a reply)</li>
+      <li>To run a web search on your behalf when you turn on "Web search," or when your question clearly needs current information</li>
+      <li>To improve reliability and fix problems</li>
+    </ul>
+
+    <h2>3. Third parties we work with</h2>
+    <p>We share the minimum data necessary with these service providers so Novara can function:</p>
+    <ul>
+      <li><strong>Google Gemini API</strong> — receives your message text (and image, if attached) to generate a reply.</li>
+      <li><strong>Google Sign-In</strong> — used only if you choose "Continue with Google," to verify your identity.</li>
+      <li><strong>DuckDuckGo</strong> — receives your search query when web search is used, to fetch results.</li>
+      <li><strong>Hosting provider (Render)</strong> — hosts our servers and database.</li>
+    </ul>
+    <p>We do not sell your personal information to anyone.</p>
+
+    <h2>4. Chat sharing</h2>
+    <p>If you use the "Share" feature on a conversation, a public link is created. Anyone with that link can view that conversation, whether or not they have a Novara account. You can disable sharing at any time from the Share menu, which immediately deactivates the link.</p>
+
+    <h2>5. Data retention</h2>
+    <p>We keep your account and conversation data until you delete your account. You can request deletion at any time — see Section 7.</p>
+
+    <h2>6. Security</h2>
+    <p>Passwords are stored using industry-standard hashing and are never visible to us in plain text. Data is transmitted over HTTPS.</p>
+
+    <h2>7. Your rights — access &amp; deletion</h2>
+    <p>You can permanently delete your account and all associated data (profile, conversations, messages, uploaded files) at any time, whether or not you still have the app installed.</p>
+    <p><a class="policy-link-btn" href="/account/delete-request">Request account deletion →</a></p>
+
+    <h2>8. Children's privacy</h2>
+    <p>Novara is not directed at children under 13, and we do not knowingly collect data from children under 13 (or the applicable minimum age in your country).</p>
+
+    <h2>9. Changes to this policy</h2>
+    <p>We may update this policy from time to time. Continued use of Novara after a change means you accept the updated policy.</p>
+
+    <h2>10. Contact us</h2>
+    <p>Questions about this policy or your data can be sent to: <strong>{{ contact_email }}</strong></p>
+  </div>
+</div>
+</body>
+</html>
