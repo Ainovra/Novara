@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Novara</title>
+<link rel="manifest" href="/static/manifest.json">
+<link rel="icon" href="/static/icons/icon-192.png">
+<link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png">
+<meta name="theme-color" content="#0F1115">
+<link rel="stylesheet" href="/static/style.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+</head>
+<body>
+
+<!-- Splash / opening animation -->
+<div class="splash" id="splash">
+  <div class="splash-mark">Novara</div>
+</div>
+
+<!-- Rename modal -->
+<div class="modal-overlay hidden" id="renameModal">
+  <div class="modal small-modal">
+    <h3>Chat ka naam badlein</h3>
+    <input type="text" id="renameInput" class="text-input" maxlength="60" placeholder="Chat ka naam">
+    <div class="modal-actions">
+      <button class="btn-ghost" id="renameCancel">Cancel</button>
+      <button class="btn-primary" id="renameSave">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Share modal -->
+<div class="modal-overlay hidden" id="shareModal">
+  <div class="modal small-modal">
+    <h3>Chat share karein</h3>
+    <p class="muted-text">Jiske paas ye link hoga, wo is chat ko (read-only) dekh sakega.</p>
+    <div class="share-link-row">
+      <input type="text" id="shareLinkInput" class="text-input" readonly>
+      <button class="btn-primary" id="shareCopyBtn">Copy</button>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-ghost" id="shareUnlink">Sharing band karein</button>
+      <button class="btn-primary" id="shareClose">Band karein</button>
+    </div>
+  </div>
+</div>
+
+<div class="app">
+
+  <!-- Sidebar -->
+  <aside class="sidebar" id="sidebar">
+    <div class="brand">
+      <span class="brand-mark-sm">Novara</span>
+      <button class="icon-btn" id="closeSidebar" aria-label="Close sidebar">✕</button>
+    </div>
+
+    <button class="new-chat-btn" id="newChatBtn">
+      <span class="plus">+</span> New chat
+    </button>
+
+    <a href="/video" class="new-chat-btn video-studio-link">
+      <span class="plus">🎬</span> Video Studio
+    </a>
+
+    <div class="conv-section">
+      <div class="conv-list" id="convList">
+        <div class="empty-hint">Koi conversation nahi hai abhi</div>
+      </div>
+    </div>
+
+    <div class="sidebar-footer">
+      <div class="user-row">
+        <div class="avatar">{{ username[0]|upper if username else "N" }}</div>
+        <span class="username-label">{{ username }}</span>
+      </div>
+      <div class="footer-actions">
+        <button class="icon-btn" id="themeToggle" title="Toggle theme">🌙</button>
+        <a href="/account/delete-request" class="icon-btn" title="Delete account">🗑</a>
+        <a href="/logout" class="icon-btn logout-btn" title="Logout">⏻</a>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Main chat -->
+  <main class="main">
+    <header class="topbar">
+      <button class="icon-btn" id="openSidebar" aria-label="Open sidebar">☰</button>
+      <span class="topbar-title">Novara</span>
+      <button class="icon-btn" id="themeToggleMobile" title="Toggle theme">🌙</button>
+    </header>
+
+    <div class="desktop-topbar">
+      <button class="websearch-toggle" id="webSearchToggle" title="Web search on/off">
+        <span class="dot"></span> Web search
+      </button>
+    </div>
+
+    <div class="chat-area" id="chatArea">
+      <div class="welcome" id="welcome">
+        <div class="welcome-mark">Novara</div>
+        <p>Poocho kuch bhi — text, photo, PDF, ya awaaz se.</p>
+      </div>
+    </div>
+
+    <div class="input-bar">
+      <div class="attach-preview" id="attachPreview" style="display:none;"></div>
+      <div class="input-wrap">
+        <button class="icon-btn attach-btn" id="attachBtn" title="Attach file">📎</button>
+        <input type="file" id="fileInput" accept="image/*,video/*,.pdf" hidden>
+        <textarea id="messageInput" placeholder="Message Novara…" rows="1"></textarea>
+        <button class="icon-btn mic-btn" id="micBtn" title="Speech to text">🎤</button>
+        <button id="sendBtn" class="send-btn" aria-label="Send">➤</button>
+      </div>
+      <p class="disclaimer">Novara galtiyan kar sakta hai. Zaroori jaankari ko verify zaroor karein.</p>
+    </div>
+  </main>
+
+</div>
+
+<script src="/static/script.js"></script>
+<script>
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/sw.js").catch(() => {});
+  });
+}
+</script>
+</body>
+</html>
