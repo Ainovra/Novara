@@ -91,6 +91,37 @@ Jab tak `VIDEO_API_URL` set nahi karte, Video Studio page dikhega lekin "abhi co
 - **Broader attachments** — the paperclip now accepts images, videos, PDFs, and common document/plugin-style files (`.doc`, `.docx`, `.ppt`, `.pptx`, `.xls`, `.xlsx`, `.txt`, `.csv`, `.json`, `.zip`, `.apk`). Only images and PDFs are actually understood by the AI (vision + text extraction); other file types are stored and shown as attachments but not analyzed.
 - **Packaging for Android (APK)** — this app is a responsive web app, which is the easiest starting point for wrapping into an Android APK later (e.g. with a WebView shell in Android Studio, or a tool like Capacitor/Trusted Web Activity). No changes were needed here for that — just deploy this to Render first, then point your Android project's WebView/TWA at your live `https://your-app.onrender.com` URL.
 
+## 8. New: redesigned login/signup
+
+Login and signup pages now show two options as white rounded buttons: **Continue with Google** and **Continue with email**. There's also a "Skip — continue as guest" text link at the bottom.
+
+**Continue with email** just reveals the same username/password fields as before, in a cleaner flow.
+
+## 9. New: permanent database (Neon PostgreSQL)
+
+Until now, Novara stored everything (users, chats, messages) in a local SQLite file on Render's server — which can get wiped whenever Render restarts or redeploys the app. This section connects a real, permanent cloud database instead. **No Termux, no local install, no terminal commands** — this is done entirely through two websites in your browser.
+
+Render's own free PostgreSQL expires after 30 days and gets deleted, so we're using **[Neon](https://neon.tech)** instead, which has a genuinely permanent free tier.
+
+### Steps
+
+1. Go to [neon.tech](https://neon.tech) and sign up (signing up with GitHub is easiest)
+2. A project is created automatically (or click "Create Project")
+3. On your project's dashboard, find the **Connection String** — it looks like:
+   ```
+   postgresql://username:password@ep-xxxx.neon.tech/dbname?sslmode=require
+   ```
+4. Copy it
+5. Go to your Render dashboard → your service → **Environment** tab
+6. **Add Environment Variable**:
+   - Key: `DATABASE_URL`
+   - Value: paste the connection string from step 4
+7. **Manual Deploy → Deploy latest commit**
+
+That's it. The app automatically detects `DATABASE_URL` and switches from the local file to Neon — no other setup needed. If `DATABASE_URL` isn't set, the app keeps working exactly as before (local SQLite), so this is safe to try.
+
+**Note on file attachments (images/PDFs/videos):** this only makes your *database* (accounts, chats, messages) permanent. Uploaded files on Render's free tier can still be lost on redeploy, since Render's free disk isn't persistent either. That's a separate, optional upgrade for later if it becomes a problem — for now, chat history and accounts are the important part, and those are now safe.
+
 ## Quota note
 
 Har text message = 1 Gemini API call (web search results context ke roop mein add hote hain, extra API call Gemini ki taraf se nahi lagti). Image generation ek alag, separate API call hai. Free tier ki daily limit (~20 requests/day) same rahegi — image generation bhi isi quota mein count hoti hai.
