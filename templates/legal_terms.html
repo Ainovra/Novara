@@ -9,8 +9,9 @@
 </head>
 <body class="auth-body">
 <div class="auth-card terms-card">
-  <img src="/static/icons/icon-192.png" alt="Novara" class="brand-logo"><div class="brand-mark">Novara</div>
-  <p class="auth-sub">Before continuing, please read these Terms &amp; Conditions</p>
+  <a href="javascript:history.back()" class="legal-back">← Back</a>
+  <div class="brand-mark">Novara</div>
+  <p class="auth-sub">Terms &amp; Conditions</p>
 
   <div class="terms-scroll">
     <p><strong>1. Acceptable use</strong><br>By using Novara, you agree not to use it in any illegal, harmful, or abusive way.</p>
@@ -21,32 +22,6 @@
     <p><strong>6. Changes to the service</strong><br>Novara's features may be updated, changed, or discontinued at any time without prior notice.</p>
     <p><strong>7. Minimum age</strong><br>You must be at least 13 years old (or the applicable minimum age in your country) to use Novara.</p>
   </div>
-
-  <label class="checkbox-row">
-    <input type="checkbox" id="termsCheckbox">
-    <span>I have read the Terms &amp; Conditions and I agree to them.</span>
-  </label>
-
-  <button id="continueBtn" class="auth-btn" disabled>Continue</button>
 </div>
-
-<script>
-const checkbox = document.getElementById("termsCheckbox");
-const continueBtn = document.getElementById("continueBtn");
-
-checkbox.addEventListener("change", () => {
-  continueBtn.disabled = !checkbox.checked;
-});
-
-continueBtn.addEventListener("click", async () => {
-  continueBtn.disabled = true;
-  continueBtn.textContent = "Please wait…";
-  try {
-    await fetch("/api/accept-terms", { method: "POST" });
-  } finally {
-    window.location.href = "/app";
-  }
-});
-</script>
 </body>
 </html>
