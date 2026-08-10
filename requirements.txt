@@ -1,0 +1,6 @@
+flask
+requests
+pypdf
+gunicorn
+authlib
+psycopg2-binary
