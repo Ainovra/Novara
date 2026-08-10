@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Novara — Profile</title>
+<link rel="stylesheet" href="/static/style.css">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+</head>
+<body>
+
+<!-- Delete account confirm modal -->
+<div class="modal-overlay hidden" id="deleteModal">
+  <div class="modal small-modal">
+    <h3>Delete account?</h3>
+    <p class="muted-text">Ye permanent hai — aapke saare chats aur account data hamesha ke liye delete ho jayenge. Ye undo nahi ho sakta.</p>
+    <div class="modal-actions">
+      <button class="btn-ghost" id="deleteCancel">Cancel</button>
+      <button class="btn-danger" id="deleteConfirm">Delete my account</button>
+    </div>
+  </div>
+</div>
+
+<!-- About / info modal -->
+<div class="modal-overlay hidden" id="aboutModal">
+  <div class="modal small-modal">
+    <h3>About Novara</h3>
+    <p class="muted-text">Your personal AI assistant — chat, learn, and get things done.</p>
+    <div class="settings-card" style="margin-bottom: 14px;">
+      <a class="settings-row" href="/legal/privacy">
+        <span class="settings-row-label"><span class="settings-row-icon">🔒</span> Privacy Policy</span>
+        <span class="settings-row-chevron">›</span>
+      </a>
+      <a class="settings-row" href="/legal/terms">
+        <span class="settings-row-label"><span class="settings-row-icon">📄</span> Terms &amp; Conditions</span>
+        <span class="settings-row-chevron">›</span>
+      </a>
+      <!-- Update this email to your real support address -->
+      <a class="settings-row" href="mailto:support@novara.app">
+        <span class="settings-row-label"><span class="settings-row-icon">✉️</span> Support</span>
+        <span class="settings-row-chevron">›</span>
+      </a>
+      <!-- Update this href once you have a Play Store / App Store / review link -->
+      <a class="settings-row" href="#" id="rateUsRow">
+        <span class="settings-row-label"><span class="settings-row-icon">⭐</span> Rate us</span>
+        <span class="settings-row-chevron">›</span>
+      </a>
+    </div>
+    <p class="settings-version">Version 1.0.0</p>
+    <div class="modal-actions">
+      <button class="btn-ghost" id="aboutClose">Close</button>
+    </div>
+  </div>
+</div>
+
+<div class="app">
+  <aside class="sidebar">
+    <div class="brand">
+      <span class="brand-mark-sm"><img src="/static/icons/icon-72.png" alt="Novara" class="brand-logo-sm"> Novara</span>
+    </div>
+    <a href="/app" class="new-chat-btn" style="text-decoration:none; display:flex; justify-content:center;">← Back to chat</a>
+    <div class="sidebar-footer">
+      <div class="user-row">
+        <div class="avatar">{{ username[0]|upper if username else "N" }}</div>
+        <span class="username-label">{{ username }}</span>
+      </div>
+      <a href="/logout" class="icon-btn logout-btn" title="Logout">⏻</a>
+    </div>
+  </aside>
+
+  <main class="main">
+    <header class="topbar" style="display:flex;">
+      <a href="/app" class="icon-btn" aria-label="Back to chat">←</a>
+      <span class="topbar-title">Profile &amp; Settings</span>
+      <button class="icon-btn" id="aboutBtn" type="button" title="About &amp; legal" aria-label="About and legal info">ⓘ</button>
+    </header>
+
+    <div class="settings-wrap">
+
+      <div class="settings-profile-card">
+        <div class="avatar-lg">{{ username[0]|upper if username else "N" }}</div>
+        <div class="settings-profile-info">
+          <div class="settings-profile-name">{{ username or "Novara user" }}</div>
+          {% if user and user.email %}
+          <div class="settings-profile-sub">{{ user.email }}</div>
+          {% else %}
+          <div class="settings-profile-sub">Username-based account</div>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="settings-group">
+        <div class="settings-group-title">Appearance</div>
+        <div class="settings-card">
+          <button class="settings-row" id="themeRow" type="button">
+            <span class="settings-row-label"><span class="settings-row-icon" id="themeRowIcon">🌙</span> Color mode</span>
+            <span class="theme-switch" id="themeSwitch"></span>
+          </button>
+        </div>
+      </div>
+
+      <div class="settings-group">
+        <div class="settings-group-title">Legal</div>
+        <div class="settings-card">
+          <a class="settings-row" href="/legal/privacy">
+            <span class="settings-row-label"><span class="settings-row-icon">🔒</span> Privacy Policy</span>
+            <span class="settings-row-chevron">›</span>
+          </a>
+          <a class="settings-row" href="/legal/terms">
+            <span class="settings-row-label"><span class="settings-row-icon">📄</span> Terms &amp; Conditions</span>
+            <span class="settings-row-chevron">›</span>
+          </a>
+        </div>
+      </div>
+
+      <div class="settings-group">
+        <div class="settings-group-title">Account</div>
+        <div class="settings-card">
+          <a class="settings-row" href="/logout">
+            <span class="settings-row-label"><span class="settings-row-icon">⏻</span> Logout</span>
+            <span class="settings-row-chevron">›</span>
+          </a>
+          <button class="settings-row danger-row" id="deleteAccountBtn" type="button">
+            <span class="settings-row-label"><span class="settings-row-icon">🗑️</span> Delete account</span>
+            <span class="settings-row-chevron">›</span>
+          </button>
+        </div>
+      </div>
+
+    </div>
+  </main>
+</div>
+
+<script>
+// ===== Theme (matches script.js so the choice stays in sync app-wide) =====
+function applyTheme(theme) {
+  document.documentElement.setAttribute("data-theme", theme);
+  localStorage.setItem("novara-theme", theme);
+  const icon = document.getElementById("themeRowIcon");
+  if (icon) icon.textContent = theme === "light" ? "☀️" : "🌙";
+}
+(function initTheme() {
+  applyTheme(localStorage.getItem("novara-theme") || "dark");
+})();
+function toggleTheme() {
+  const current = document.documentElement.getAttribute("data-theme") === "light" ? "light" : "dark";
+  applyTheme(current === "light" ? "dark" : "light");
+}
+document.getElementById("themeRow").onclick = toggleTheme;
+
+// ===== About / info modal =====
+const aboutModal = document.getElementById("aboutModal");
+document.getElementById("aboutBtn").onclick = () => aboutModal.classList.remove("hidden");
+document.getElementById("aboutClose").onclick = () => aboutModal.classList.add("hidden");
+aboutModal.addEventListener("click", (e) => { if (e.target === aboutModal) aboutModal.classList.add("hidden"); });
+
+// "Rate us" has no real store link yet — swap the href in the HTML above
+// once you have one, this fallback just avoids a dead "#" click meanwhile.
+document.getElementById("rateUsRow").onclick = (e) => {
+  if (e.currentTarget.getAttribute("href") === "#") {
+    e.preventDefault();
+    alert("Rate us link coming soon!");
+  }
+};
+
+// ===== Delete account =====
+const deleteModal = document.getElementById("deleteModal");
+document.getElementById("deleteAccountBtn").onclick = () => deleteModal.classList.remove("hidden");
+document.getElementById("deleteCancel").onclick = () => deleteModal.classList.add("hidden");
+document.getElementById("deleteConfirm").onclick = async () => {
+  const btn = document.getElementById("deleteConfirm");
+  btn.disabled = true;
+  btn.textContent = "Deleting…";
+  try {
+    const res = await fetch("/api/account/delete", { method: "POST" });
+    const data = await res.json();
+    window.location.href = data.redirect || "/login";
+  } catch (e) {
+    btn.disabled = false;
+    btn.textContent = "Delete my account";
+  }
+};
+</script>
+</body>
+</html>
