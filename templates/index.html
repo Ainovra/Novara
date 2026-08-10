@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Novara</title>
+<link rel="manifest" href="/static/manifest.json">
+<meta name="theme-color" content="#0F1115">
+<link rel="icon" href="/static/icon-192.png">
+<link rel="apple-touch-icon" href="/static/icon-192.png">
+<link rel="stylesheet" href="/static/style.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+</head>
+<body>
+
+<!-- Splash / opening animation -->
+<div class="splash" id="splash">
+  <div class="splash-mark"><img src="/static/icon-192.png" alt="Novara" class="splash-logo"> Novara</div>
+</div>
+
+<!-- Rename modal -->
+<div class="modal-overlay hidden" id="renameModal">
+  <div class="modal small-modal">
+    <h3>Rename chat</h3>
+    <input type="text" id="renameInput" class="text-input" maxlength="60" placeholder="Chat name">
+    <div class="modal-actions">
+      <button class="btn-ghost" id="renameCancel">Cancel</button>
+      <button class="btn-primary" id="renameSave">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Share modal -->
+<div class="modal-overlay hidden" id="shareModal">
+  <div class="modal small-modal">
+    <h3>Share chat</h3>
+    <p class="muted-text">Anyone with this link will be able to view this chat (read-only).</p>
+    <div class="share-link-row">
+      <input type="text" id="shareLinkInput" class="text-input" readonly>
+      <button class="btn-primary" id="shareCopyBtn">Copy</button>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-ghost" id="shareUnlink">Stop sharing</button>
+      <button class="btn-primary" id="shareClose">Close</button>
+    </div>
+  </div>
+</div>
+
+<div class="app">
+
+  <!-- Sidebar -->
+  <aside class="sidebar" id="sidebar">
+    <div class="brand">
+      <span class="brand-mark-sm"><img src="/static/icon-72.png" alt="Novara" class="brand-logo-sm"> Novara</span>
+      <button class="icon-btn" id="closeSidebar" aria-label="Close sidebar">✕</button>
+    </div>
+
+    <button class="new-chat-btn" id="newChatBtn">
+      <span class="plus">+</span> New chat
+    </button>
+
+    <a href="/video" class="new-chat-btn video-studio-link">
+      <span class="plus">🎬</span> Video Studio
+    </a>
+
+    <div class="conv-section">
+      <div class="conv-list" id="convList">
+        <div class="empty-hint">No conversations yet</div>
+      </div>
+    </div>
+
+    <div class="sidebar-footer">
+      <div class="user-row">
+        <div class="avatar">{{ username[0]|upper if username else "N" }}</div>
+        <span class="username-label">{{ username }}</span>
+      </div>
+      <div class="footer-actions">
+        <button class="icon-btn" id="themeToggle" title="Toggle theme">🌙</button>
+        <a href="/profile" class="icon-btn settings-link" title="Profile & Settings" aria-label="Profile & Settings"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7Zm8 3.5-.01-.7 1.6-1.25-1.7-2.94-1.9.78a8.2 8.2 0 0 0-1.2-.7L16.5 5h-3.4l-.3 2.2c-.42.18-.82.42-1.2.7l-1.9-.78L8 10.06l1.6 1.25-.01.7.01.7L8 13.94l1.7 2.94 1.9-.78c.38.28.78.52 1.2.7l.3 2.2h3.4l.3-2.2c.42-.18.82-.42 1.2-.7l1.9.78 1.7-2.94-1.6-1.25.01-.7Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg></a>
+        <a href="/logout" class="icon-btn logout-btn" title="Logout">⏻</a>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Main chat -->
+  <main class="main">
+    <header class="topbar">
+      <button class="icon-btn" id="openSidebar" aria-label="Open sidebar">☰</button>
+      <span class="topbar-title">Novara</span>
+      <button class="icon-btn" id="themeToggleMobile" title="Toggle theme">🌙</button>
+    </header>
+
+    <div class="desktop-topbar">
+      <button class="websearch-toggle" id="webSearchToggle" title="Web search on/off">
+        <span class="dot"></span> Web search
+      </button>
+      <button class="websearch-toggle" id="imageGenToggle" title="Generate an image instead of text">
+        <span class="dot"></span> 🎨 Create image
+      </button>
+    </div>
+
+    <div class="chat-area" id="chatArea">
+      <div class="welcome" id="welcome">
+        <div class="welcome-mark">Novara</div>
+        <p>Ask anything — text, photo, PDF, voice, or ask me to create an image.</p>
+      </div>
+    </div>
+
+    <div class="input-bar">
+      <div class="attach-preview" id="attachPreview" style="display:none;"></div>
+
+      <!-- Attach menu popup (Camera / Photos & Videos / Files) -->
+      <div class="attach-menu hidden" id="attachMenu">
+        <button class="attach-menu-item" id="attachCameraOption" type="button">
+          <span class="attach-menu-icon">📷</span> Camera
+        </button>
+        <button class="attach-menu-item" id="attachMediaOption" type="button">
+          <span class="attach-menu-icon">🖼️</span> Photos &amp; Videos
+        </button>
+        <button class="attach-menu-item" id="attachFilesOption" type="button">
+          <span class="attach-menu-icon">📄</span> Files
+        </button>
+      </div>
+
+      <!-- Model picker popup (Fast / Thinking / Omega) -->
+      <div class="model-menu hidden" id="modelMenu">
+        <button class="model-menu-item active" id="modelFastBtn" data-model="fast" type="button">
+          <span class="attach-menu-icon">⚡</span> Fast v1
+          <span class="model-menu-desc">Quick, everyday replies</span>
+        </button>
+        <button class="model-menu-item" id="modelThinkingBtn" data-model="thinking" type="button">
+          <span class="attach-menu-icon">💭</span> Thinking v1
+          <span class="model-menu-desc">Reasons step by step</span>
+        </button>
+        <button class="model-menu-item" id="modelOmegaBtn" data-model="omega" type="button">
+          <span class="attach-menu-icon">🧠</span> Omega v1
+          <span class="model-menu-desc">Deepest reasoning — code, tough problems</span>
+        </button>
+      </div>
+
+      <div class="input-wrap">
+        <button class="icon-btn attach-btn" id="attachBtn" title="Attach">📎</button>
+
+        <input type="file" id="fileInputCamera" accept="image/*" capture="environment" hidden>
+        <input type="file" id="fileInputMedia" accept="image/*,video/*" hidden>
+        <input type="file" id="fileInputFiles" accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt,.zip,.apk,.json,.py,.js,.jsx,.ts,.tsx,.html,.htm,.css,.java,.c,.cpp,.h,.cs,.php,.rb,.go,.rs,.swift,.kt,.sql,.sh,.yaml,.yml,.xml,.md,.csv,.log,.ini" hidden>
+
+        <button class="model-select-btn" id="modelSelectBtn" type="button" title="Choose model">
+          <span id="modelSelectIcon">⚡</span> <span id="modelSelectLabel">Fast</span>
+        </button>
+
+        <textarea id="messageInput" placeholder="Message Novara…" rows="1"></textarea>
+        <button id="sendBtn" class="voice-action-btn show-mic" type="button" aria-label="Voice assistant" title="Talk to Novara">
+          <svg class="action-mic" viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="3" width="8" height="12" rx="4" fill="none" stroke="currentColor" stroke-width="2"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3M8.5 21h7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          <svg class="action-send" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h13M13 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <span class="mic-wave" id="micWave" aria-hidden="true"></span>
+        </button>
+      </div>
+      <p class="disclaimer">Novara can make mistakes. Please verify important information.</p>
+    </div>
+  </main>
+
+</div>
+
+<script src="/static/script.js"></script>
+<script>
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", () => {
+      navigator.serviceWorker.register("/static/sw.js").catch(() => {});
+    });
+  }
+</script>
+</body>
+</html>
