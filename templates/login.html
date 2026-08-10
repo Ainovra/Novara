@@ -9,7 +9,7 @@
 </head>
 <body class="auth-body">
 <div class="auth-card">
-  <div class="brand-mark">Novara</div>
+  <img src="/static/icons/icon-192.png" alt="Novara" class="brand-logo"><div class="brand-mark">Novara</div>
   <p class="auth-sub">Log in to your account</p>
 
   <div id="errorBox" class="auth-error" style="display:none;"></div>
@@ -52,11 +52,6 @@ function showError(msg) {
   errorBox.style.display = "block";
 }
 function hideError() { errorBox.style.display = "none"; }
-
-// Show a message if Google sign-in failed and redirected back here
-if (new URLSearchParams(window.location.search).get("error") === "google_failed") {
-  showError("Google sign-in ran into a problem — please try again, or use email instead.");
-}
 
 function showScreen(screen) {
   providerScreen.style.display = "none";
