@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Novara — Settings</title>
+<link rel="stylesheet" href="/static/style.css">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+</head>
+<body>
+<div class="modal-overlay hidden" id="deleteModal">
+  <div class="modal small-modal">
+    <h3>Delete account?</h3>
+    <p class="muted-text">Ye permanent hai — aapke saare chats aur account data hamesha ke liye delete ho jayenge. Ye undo nahi ho sakta.</p>
+    <div class="modal-actions"><button class="btn-ghost" id="deleteCancel">Cancel</button><button class="btn-danger" id="deleteConfirm">Delete my account</button></div>
+  </div>
+</div>
+
+<div class="app">
+  <aside class="sidebar">
+    <div class="brand"><span class="brand-mark-sm"><img src="/static/icons/icon-72.png" alt="Novara" class="brand-logo-sm"> Novara</span></div>
+    <a href="/app" class="new-chat-btn" style="text-decoration:none;display:flex;justify-content:center;">← Back to chat</a>
+    <div class="sidebar-footer">
+      <div class="user-row"><div class="avatar">{{ username[0]|upper if username else "N" }}</div><span class="username-label">{{ username }}</span></div>
+      <a href="/logout" class="icon-btn logout-btn" title="Logout">⏻</a>
+    </div>
+  </aside>
+
+  <main class="main">
+    <header class="topbar" style="display:flex;"><a href="/app" class="icon-btn">←</a><span class="topbar-title">Settings</span></header>
+    <div class="settings-wrap">
+      <div class="settings-profile-card">
+        <div class="avatar-lg">{{ username[0]|upper if username else "N" }}</div>
+        <div class="settings-profile-info"><div class="settings-profile-name">{{ username or "Novara user" }}</div><div class="settings-profile-sub">{{ user.email if user and user.email else "Username-based account" }}</div></div>
+      </div>
+
+      <div class="settings-group"><div class="settings-group-title">Appearance</div><div class="settings-card">
+        <button class="settings-row" id="themeRow"><span class="settings-row-label"><span class="settings-row-icon" id="themeRowIcon">🌙</span> Color mode</span><span class="theme-switch" id="themeSwitch"></span></button>
+        <div class="settings-row"><span class="settings-row-label"><span class="settings-row-icon">Aa</span> Font style</span><select class="settings-select" id="fontSelect"><option value="inter">Inter</option><option value="space">Space Grotesk</option><option value="system">System</option><option value="serif">Serif</option></select></div>
+        <button class="settings-row" id="hapticRow"><span class="settings-row-label"><span class="settings-row-icon">📳</span> Haptic feedback</span><span class="toggle" id="hapticToggle"></span></button>
+      </div></div>
+
+      <div class="settings-group"><div class="settings-group-title">Capabilities</div><div class="settings-card">
+        <button class="settings-row" data-cap="web_search"><span class="settings-row-label"><span class="settings-row-icon">🌐</span> Web search</span><span class="toggle" id="capWebSearch"></span></button>
+        <button class="settings-row" data-cap="image_gen"><span class="settings-row-label"><span class="settings-row-icon">🎨</span> Create images</span><span class="toggle" id="capImageGen"></span></button>
+        <button class="settings-row" data-cap="files"><span class="settings-row-label"><span class="settings-row-icon">📁</span> Files &amp; photos</span><span class="toggle" id="capFiles"></span></button>
+        <button class="settings-row" data-cap="memory"><span class="settings-row-label"><span class="settings-row-icon">🧠</span> Memory</span><span class="toggle" id="capMemory"></span></button>
+        <button class="settings-row" data-cap="voice_assistant"><span class="settings-row-label"><span class="settings-row-icon">🎙️</span> Voice assistant</span><span class="toggle" id="capVoice"></span></button>
+        <button class="settings-row" data-cap="code_execution"><span class="settings-row-label"><span class="settings-row-icon">⌘</span> Code execution &amp; file creation</span><span class="toggle" id="capCodeExecution"></span></button>
+        <button class="settings-row settings-row-disabled" data-cap="artifacts" title="Artifacts require code execution"><span class="settings-row-label"><span class="settings-row-icon">📄</span> Artifacts <small>Required by code execution</small></span><span class="toggle" id="capArtifacts"></span></button>
+        <button class="settings-row" data-cap="switch_flagged_model"><span class="settings-row-label"><span class="settings-row-icon">↕️</span> Switch models when a message is flagged</span><span class="toggle" id="capSwitchFlagged"></span></button>
+      </div></div>
+
+      <div class="settings-group"><div class="settings-group-title">Memory</div><div class="settings-card settings-memory-card">
+        <button class="settings-row memory-files-row" id="memoryFilesToggle"><span class="settings-row-label"><span class="settings-row-icon">🗂️</span> Your memory files <small>View and manage what Novara remembers.</small></span><span class="settings-row-chevron">›</span></button>
+        <div class="memory-files-panel" id="memoryFilesPanel">
+        <div class="memory-add"><input id="memoryInput" class="text-input" maxlength="300" placeholder="e.g. I prefer concise answers"><button class="btn-primary" id="memoryAddBtn">Save</button></div>
+        <div id="memoryList" class="memory-list"></div>
+        <p class="settings-help">Memory is stored in this browser and is sent to Novara only when Memory is turned on. You can delete individual memories anytime.</p>
+        </div>
+      </div></div>
+
+      <div class="settings-group"><div class="settings-group-title">Voice</div><div class="settings-card">
+        <div class="settings-row"><span class="settings-row-label"><span class="settings-row-icon">🗣️</span> Voice</span><select class="settings-select" id="voiceSelect"><option value="">Default voice</option></select></div>
+        <div class="settings-row"><span class="settings-row-label"><span class="settings-row-icon">🔊</span> Volume</span><div class="voice-volume"><input type="range" id="voiceVolume" min="0" max="1" step="0.05"><span id="voiceVolumeValue">100%</span></div></div>
+        <button class="settings-row" id="voiceTest"><span class="settings-row-label"><span class="settings-row-icon">▶️</span> Test voice</span><span class="settings-row-chevron">›</span></button>
+      </div></div>
+
+      <div class="settings-group"><div class="settings-group-title">Your data &amp; privacy</div><div class="settings-card">
+        <a class="settings-row" href="/legal/privacy"><span class="settings-row-label"><span class="settings-row-icon">🔒</span> Privacy &amp; data</span><span class="settings-row-chevron">›</span></a>
+        <div class="privacy-stats"><div><strong>{{ conv_count }}</strong><span>Chats</span></div><div><strong>{{ msg_count }}</strong><span>Messages</span></div></div>
+        <a class="settings-row" href="/legal/terms"><span class="settings-row-label"><span class="settings-row-icon">📄</span> Terms &amp; Conditions</span><span class="settings-row-chevron">›</span></a>
+      </div></div>
+
+      <div class="settings-group"><div class="settings-group-title">Account</div><div class="settings-card">
+        <a class="settings-row" href="/logout"><span class="settings-row-label"><span class="settings-row-icon">⏻</span> Logout</span><span class="settings-row-chevron">›</span></a>
+        <button class="settings-row danger-row" id="deleteAccountBtn"><span class="settings-row-label"><span class="settings-row-icon">🗑️</span> Delete account</span><span class="settings-row-chevron">›</span></button>
+      </div></div>
+    </div>
+  </main>
+</div>
+
+<script>
+const KEY='novara-settings';
+const defaults={haptic:true,web_search:true,image_gen:true,files:true,memory:true,voice_assistant:true,artifacts:false,code_execution:false,switch_flagged_model:true,font:'inter',voice:'',volume:1};
+let settings={...defaults,...JSON.parse(localStorage.getItem(KEY)||'{}')};
+function save(){localStorage.setItem(KEY,JSON.stringify(settings));}
+function haptic(){if(settings.haptic&&navigator.vibrate)navigator.vibrate(8);}
+function applyTheme(t){document.documentElement.setAttribute('data-theme',t);localStorage.setItem('novara-theme',t);document.getElementById('themeRowIcon').textContent=t==='light'?'☀️':'🌙';}
+applyTheme(localStorage.getItem('novara-theme')||'dark');
+document.getElementById('themeRow').onclick=()=>{haptic();applyTheme(document.documentElement.getAttribute('data-theme')==='light'?'dark':'light');};
+function applyFont(f){document.documentElement.setAttribute('data-font',f);}
+applyFont(settings.font);document.getElementById('fontSelect').value=settings.font;
+document.getElementById('fontSelect').onchange=e=>{settings.font=e.target.value;save();applyFont(settings.font);haptic();};
+function setToggle(id,on){document.getElementById(id).classList.toggle('on',!!on);}
+const caps={web_search:'capWebSearch',image_gen:'capImageGen',files:'capFiles',memory:'capMemory',voice_assistant:'capVoice',code_execution:'capCodeExecution',artifacts:'capArtifacts',switch_flagged_model:'capSwitchFlagged'};
+Object.entries(caps).forEach(([k,id])=>{
+  const row=document.querySelector(`[data-cap="${k}"]`);
+  setToggle(id,settings[k]);
+  if(k==='artifacts'){ settings.artifacts=!!settings.code_execution && !!settings.artifacts; setToggle(id,settings.artifacts); }
+  row.onclick=()=>{
+    if(k==='artifacts' && !settings.code_execution){ haptic(); return; }
+    settings[k]=!settings[k];
+    if(k==='code_execution' && !settings[k]) settings.artifacts=false;
+    setToggle(id,settings[k]); setToggle('capArtifacts',settings.artifacts); save(); haptic();
+  };
+});
+document.getElementById('hapticToggle').onclick=()=>{settings.haptic=!settings.haptic;setToggle('hapticToggle',settings.haptic);save();haptic();};setToggle('hapticToggle',settings.haptic);
+// Memory
+const memoryInput=document.getElementById('memoryInput'), memoryList=document.getElementById('memoryList');
+function memories(){try{return JSON.parse(localStorage.getItem('novara-memory')||'[]')}catch{return[]}}
+function renderMemories(){const a=memories();memoryList.innerHTML=a.length?a.map((m,i)=>`<div class="memory-item"><span>${escapeHtml(m)}</span><button data-i="${i}" title="Delete">✕</button></div>`).join(''):'<div class="empty-memory">No memories saved.</div>';memoryList.querySelectorAll('button').forEach(b=>b.onclick=()=>{const a=memories();a.splice(+b.dataset.i,1);localStorage.setItem('novara-memory',JSON.stringify(a));renderMemories();haptic();});}
+function escapeHtml(x){const d=document.createElement('div');d.textContent=x;return d.innerHTML;}
+document.getElementById('memoryFilesToggle').onclick=()=>{haptic();document.getElementById('memoryFilesPanel').classList.toggle('open');};
+document.getElementById('memoryAddBtn').onclick=()=>{const v=memoryInput.value.trim();if(!v)return;const a=memories();a.push(v);localStorage.setItem('novara-memory',JSON.stringify(a.slice(-50)));memoryInput.value='';renderMemories();haptic();};renderMemories();
+// Voice
+function voices(){return 'speechSynthesis' in window?window.speechSynthesis.getVoices():[];}
+function fillVoices(){const s=document.getElementById('voiceSelect');const old=settings.voice;s.innerHTML='<option value="">Default voice</option>';voices().forEach((v,i)=>{const o=document.createElement('option');o.value=String(i);o.textContent=`${v.name} — ${v.lang}`;s.appendChild(o);});if(old)s.value=old;}
+fillVoices();if('speechSynthesis'in window)window.speechSynthesis.onvoiceschanged=fillVoices;
+const vs=document.getElementById('voiceSelect');vs.value=settings.voice;vs.onchange=e=>{settings.voice=e.target.value;save();haptic();};
+const vol=document.getElementById('voiceVolume');vol.value=settings.volume;document.getElementById('voiceVolumeValue').textContent=Math.round(settings.volume*100)+'%';vol.oninput=e=>{settings.volume=Number(e.target.value);document.getElementById('voiceVolumeValue').textContent=Math.round(settings.volume*100)+'%';save();};
+document.getElementById('voiceTest').onclick=()=>{haptic();if(!('speechSynthesis'in window))return;const u=new SpeechSynthesisUtterance('Hello, I am Novara. This is your selected voice.');u.volume=settings.volume;const a=voices();if(settings.voice&&a[Number(settings.voice)])u.voice=a[Number(settings.voice)];window.speechSynthesis.cancel();window.speechSynthesis.speak(u);};
+// Delete account
+const modal=document.getElementById('deleteModal');document.getElementById('deleteAccountBtn').onclick=()=>{haptic();modal.classList.remove('hidden')};document.getElementById('deleteCancel').onclick=()=>modal.classList.add('hidden');document.getElementById('deleteConfirm').onclick=async()=>{const b=document.getElementById('deleteConfirm');b.disabled=true;b.textContent='Deleting…';try{const r=await fetch('/api/account/delete',{method:'POST'});const d=await r.json();localStorage.removeItem(KEY);localStorage.removeItem('novara-memory');location.href=d.redirect||'/login';}catch{b.disabled=false;b.textContent='Delete my account';}};
+</script>
+</body>
+</html>
