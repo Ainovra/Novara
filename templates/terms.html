@@ -42,9 +42,15 @@ continueBtn.addEventListener("click", async () => {
   continueBtn.disabled = true;
   continueBtn.textContent = "Please wait…";
   try {
-    await fetch("/api/accept-terms", { method: "POST" });
-  } finally {
+    const res = await fetch("/api/accept-terms", { method: "POST" });
+    if (!res.ok) throw new Error("save failed");
+    // Only redirect once we know the server actually saved it — redirecting
+    // unconditionally (even on a failed save) was what caused this screen
+    // to bounce right back to itself.
     window.location.href = "/app";
+  } catch (e) {
+    continueBtn.textContent = "Couldn't save — tap to retry";
+    continueBtn.disabled = false;
   }
 });
 </script>
