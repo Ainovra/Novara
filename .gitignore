@@ -1,0 +1,7 @@
+
+.gradle/
+**/.gradle/
+**/build/
+android/gradle-8.13/
+android/gradle-8.13-bin.zip
+*.apk
