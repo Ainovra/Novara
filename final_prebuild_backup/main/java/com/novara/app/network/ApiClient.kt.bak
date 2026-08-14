@@ -1,0 +1,105 @@
+package com.novara.app.network
+
+import com.novara.app.Config
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import okhttp3.Cookie
+import okhttp3.CookieJar
+import okhttp3.HttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
+import org.json.JSONObject
+import java.io.IOException
+import java.util.concurrent.ConcurrentHashMap
+
+object ApiClient {
+
+    private val cookieStore = ConcurrentHashMap<String, List<Cookie>>()
+
+    private val cookieJar = object : CookieJar {
+        override fun saveFromResponse(url: HttpUrl, cookies: List<Cookie>) {
+            cookieStore[url.host] = cookies
+        }
+        override fun loadForRequest(url: HttpUrl): List<Cookie> {
+            return cookieStore[url.host] ?: emptyList()
+        }
+    }
+
+    val client: OkHttpClient = OkHttpClient.Builder()
+        .cookieJar(cookieJar)
+        .build()
+
+    private val JSON = "application/json; charset=utf-8".toMediaType()
+    private val BASE_URL = Config.WEB_BASE_URL
+
+    sealed class ApiResult<out T> {
+        data class Success<T>(val data: T) : ApiResult<T>()
+        data class Failure(val message: String) : ApiResult<Nothing>()
+    }
+
+    data class AuthResponse(val ok: Boolean, val redirect: String?)
+
+    private suspend fun postJson(path: String, body: JSONObject): ApiResult<AuthResponse> =
+        withContext(Dispatchers.IO) {
+            try {
+                val request = Request.Builder()
+                    .url(BASE_URL + path)
+                    .post(body.toString().toRequestBody(JSON))
+                    .build()
+                client.newCall(request).execute().use { response ->
+                    val text = response.body?.string().orEmpty()
+                    val json = if (text.isNotBlank()) JSONObject(text) else JSONObject()
+                    if (response.isSuccessful) {
+                        val redirect = if (json.has("redirect") && !json.isNull("redirect"))
+                            json.getString("redirect") else null
+                        ApiResult.Success(AuthResponse(ok = json.optBoolean("ok", true), redirect = redirect))
+                    } else {
+                        ApiResult.Failure(json.optString("error", "Something went wrong (${response.code})."))
+                    }
+                }
+            } catch (e: IOException) {
+                ApiResult.Failure("Can't reach Novara — check your connection.")
+            }
+        }
+
+    suspend fun login(username: String, password: String): ApiResult<AuthResponse> =
+        postJson("/api/login", JSONObject().put("username", username).put("password", password))
+
+    suspend fun signup(username: String, password: String): ApiResult<AuthResponse> =
+        postJson("/api/signup", JSONObject().put("username", username).put("password", password))
+
+    suspend fun guestLogin(): ApiResult<AuthResponse> =
+        postJson("/api/guest", JSONObject())
+
+    suspend fun acceptTerms(): ApiResult<AuthResponse> =
+        postJson("/api/accept-terms", JSONObject())
+
+    // Exchanges the one-time ?code=... from the novara://auth-complete deep
+    // link for a real session. The response is a redirect (not JSON) that
+    // sets the session cookie on itself — so we read it with redirects
+    // disabled and take the Location header as the next screen to show.
+    suspend fun consumeAuthCode(code: String): ApiResult<AuthResponse> = withContext(Dispatchers.IO) {
+        try {
+            val noRedirectClient = client.newBuilder().followRedirects(false).build()
+            val httpUrl = (BASE_URL + Config.MOBILE_CONSUME_PATH).toHttpUrl().newBuilder()
+                .addQueryParameter("code", code)
+                .build()
+            val request = Request.Builder().url(httpUrl).get().build()
+            noRedirectClient.newCall(request).execute().use { response ->
+                when {
+                    response.code in 300..399 ->
+                        ApiResult.Success(AuthResponse(ok = true, redirect = response.header("Location")))
+                    response.isSuccessful ->
+                        ApiResult.Success(AuthResponse(ok = true, redirect = null))
+                    else ->
+                        ApiResult.Failure("Google sign-in couldn't be completed (${response.code}).")
+                }
+            }
+        } catch (e: IOException) {
+            ApiResult.Failure("Can't reach Novara — check your connection.")
+        }
+    }
+}
