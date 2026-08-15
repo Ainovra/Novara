@@ -28,7 +28,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.lifecycleScope
 import com.novara.app.network.ApiClient
-import com.novara.app.ui.screens.ChatScreen
 import com.novara.app.ui.theme.NovaraTheme
 import kotlinx.coroutines.launch
 
@@ -214,7 +213,7 @@ private fun NovaraNativeApp(
                     }
                 )
             } else {
-                ChatScreen()
+                com.novara.app.ui.screens.ChatScreen()
             }
         }
     }
@@ -735,7 +734,7 @@ private fun NovaraLogo() {
 }
 
 @Composable
-private fun ChatScreen() {
+private fun HomeScreenNative() {
     var message by remember { mutableStateOf("") }
     var dark by remember { mutableStateOf(true) }
 

@@ -13,9 +13,8 @@ class SplashActivity : AppCompatActivity() {
             Intent(this, MainActivity::class.java).apply {
                 action = intent.action
                 data = intent.data
-                flags =
-                    Intent.FLAG_ACTIVITY_CLEAR_TOP or
-                    Intent.FLAG_ACTIVITY_SINGLE_TOP
+                flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                        Intent.FLAG_ACTIVITY_SINGLE_TOP
             }
         )
 
