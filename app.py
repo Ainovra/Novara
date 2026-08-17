@@ -1,10 +1,13 @@
 import os
+import secrets
+import smtplib
+from email.message import EmailMessage
 import re
 import sqlite3
 import uuid
 import base64
 import mimetypes
-from datetime import datetime
+from datetime import datetime, timedelta
 from functools import wraps
 from urllib.parse import quote
 
@@ -216,6 +219,51 @@ def admin_required(f):
 # WELCOME / INTRODUCTION
 # =========================
 
+
+
+# ============================================================
+# NOVARA EMAIL VERIFICATION
+# ============================================================
+
+SMTP_HOST = os.getenv("SMTP_HOST", "smtp.gmail.com")
+SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
+SMTP_USERNAME = os.getenv("SMTP_USERNAME", "")
+SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")
+MAIL_FROM = os.getenv("MAIL_FROM", SMTP_USERNAME)
+
+VERIFICATION_CODE_MINUTES = 10
+
+
+def send_verification_email(to_email, first_name, code):
+    if not SMTP_USERNAME or not SMTP_PASSWORD:
+        raise RuntimeError("SMTP email settings are not configured.")
+
+    msg = EmailMessage()
+    msg["Subject"] = "Your Novara verification code"
+    msg["From"] = MAIL_FROM
+    msg["To"] = to_email
+
+    msg.set_content(
+        f"""Hi {first_name},
+
+Your Novara verification code is:
+
+{code}
+
+This code expires in 10 minutes.
+
+If you did not create a Novara account, you can safely ignore this email.
+
+— Novara
+"""
+    )
+
+    with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=30) as smtp:
+        smtp.starttls()
+        smtp.login(SMTP_USERNAME, SMTP_PASSWORD)
+        smtp.send_message(msg)
+
+
 @app.route("/welcome")
 def welcome_page():
     if session.get("user_id"):
@@ -277,28 +325,187 @@ def signup_page():
 
 @app.route("/api/signup", methods=["POST"])
 def api_signup():
-    data = request.json or {}
-    username = data.get("username", "").strip()
-    password = data.get("password", "")
+    data = request.get_json(silent=True) or {}
 
-    if len(username) < 3:
-        return jsonify({"error": "Username kam se kam 3 characters ka ho."}), 400
-    if len(password) < 6:
-        return jsonify({"error": "Password kam se kam 6 characters ka ho."}), 400
+    first_name = (data.get("first_name") or "").strip()
+    last_name = (data.get("last_name") or "").strip()
+    username = (data.get("username") or "").strip()
+    email = (data.get("email") or "").strip().lower()
+    phone_number = (data.get("phone_number") or "").strip()
+    password = data.get("password") or ""
+    confirm_password = data.get("confirm_password") or ""
+
+    # Required fields
+    if not first_name:
+        return jsonify({"error": "First name is required."}), 400
+
+    if not last_name:
+        return jsonify({"error": "Last name is required."}), 400
+
+    if not username:
+        return jsonify({"error": "Username is required."}), 400
+
+    if not email:
+        return jsonify({"error": "Email address is required."}), 400
+
+    if not password:
+        return jsonify({"error": "Password is required."}), 400
+
+    if not confirm_password:
+        return jsonify({"error": "Please confirm your password."}), 400
+
+    # Name validation
+    if len(first_name) > 50 or len(last_name) > 50:
+        return jsonify({"error": "Name is too long."}), 400
+
+    if not re.fullmatch(r"[A-Za-zÀ-ÿ' -]+", first_name):
+        return jsonify({"error": "Please enter a valid first name."}), 400
+
+    if not re.fullmatch(r"[A-Za-zÀ-ÿ' -]+", last_name):
+        return jsonify({"error": "Please enter a valid last name."}), 400
+
+    # Username
+    if not re.fullmatch(r"[A-Za-z0-9_.-]{3,30}", username):
+        return jsonify({
+            "error": "Username must be 3–30 characters and use only letters, numbers, _ . or -."
+        }), 400
+
+    # Email
+    email_pattern = (
+        r"^[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@"
+        r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?"
+        r"(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+$"
+    )
+
+    if not re.fullmatch(email_pattern, email):
+        return jsonify({"error": "Please enter a valid email address."}), 400
+
+    # Optional phone
+    if phone_number:
+        if not re.fullmatch(r"[0-9+\-() ]{7,20}", phone_number):
+            return jsonify({"error": "Please enter a valid phone number."}), 400
+
+    # Password confirmation
+    if password != confirm_password:
+        return jsonify({"error": "Passwords do not match."}), 400
+
+    # Common strong password requirements
+    if len(password) < 8:
+        return jsonify({
+            "error": "Password must be at least 8 characters."
+        }), 400
+
+    if not re.search(r"[A-Z]", password):
+        return jsonify({
+            "error": "Password must contain an uppercase letter."
+        }), 400
+
+    if not re.search(r"[a-z]", password):
+        return jsonify({
+            "error": "Password must contain a lowercase letter."
+        }), 400
+
+    if not re.search(r"[0-9]", password):
+        return jsonify({
+            "error": "Password must contain a number."
+        }), 400
+
+    if not re.search(r"[^A-Za-z0-9]", password):
+        return jsonify({
+            "error": "Password must contain a special character."
+        }), 400
 
     db = get_db()
-    if db.execute("SELECT id FROM users WHERE username = ?", (username,)).fetchone():
-        return jsonify({"error": "Ye username pehle se liya gaya hai."}), 400
+
+    # Existing username
+    if db.execute(
+        "SELECT id FROM users WHERE LOWER(username)=LOWER(?)",
+        (username,)
+    ).fetchone():
+        return jsonify({
+            "error": "That username is already taken."
+        }), 400
+
+    # Existing email
+    if db.execute(
+        "SELECT id FROM users WHERE LOWER(email)=LOWER(?)",
+        (email,)
+    ).fetchone():
+        return jsonify({
+            "error": "An account with that email already exists."
+        }), 400
+
+    # Six digit verification code
+    verification_code = f"{secrets.randbelow(1000000):06d}"
+
+    verification_code_hash = generate_password_hash(
+        verification_code
+    )
+
+    verification_expires_at = (
+        datetime.now() +
+        timedelta(minutes=VERIFICATION_CODE_MINUTES)
+    ).isoformat()
 
     user_id = str(uuid.uuid4())
-    db.execute(
-        "INSERT INTO users (id, username, password_hash, terms_accepted, created_at) VALUES (?, ?, ?, 0, ?)",
-        (user_id, username, generate_password_hash(password), datetime.now().isoformat())
-    )
-    db.commit()
+
+    try:
+        db.execute(
+            """
+            INSERT INTO users (
+                id,
+                username,
+                email,
+                password_hash,
+                first_name,
+                last_name,
+                phone_number,
+                email_verified,
+                verification_code_hash,
+                verification_expires_at,
+                terms_accepted,
+                created_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, 0, ?)
+            """,
+            (
+                user_id,
+                username,
+                email,
+                generate_password_hash(password),
+                first_name,
+                last_name,
+                phone_number or None,
+                verification_code_hash,
+                verification_expires_at,
+                datetime.now().isoformat()
+            )
+        )
+
+        db.commit()
+
+        send_verification_email(
+            email,
+            first_name,
+            verification_code
+        )
+
+    except Exception as e:
+        db.rollback()
+        print("NOVARA SIGNUP ERROR:", e)
+
+        return jsonify({
+            "error": "We couldn't send the verification email. Check your email settings and try again."
+        }), 500
+
     session["user_id"] = user_id
     session["username"] = username
-    return jsonify({"ok": True, "redirect": url_for("terms_page")})
+
+    return jsonify({
+        "ok": True,
+        "redirect": url_for("verify_email_page")
+    })
+
 
 
 @app.route("/login", methods=["GET"])
@@ -927,3 +1134,202 @@ def api_video_edit():
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 5000))
     app.run(host="0.0.0.0", port=port, debug=False)
+
+
+
+@app.route("/verify-email")
+@login_required
+def verify_email_page():
+    db = get_db()
+
+    user = db.execute(
+        """
+        SELECT email, first_name, email_verified
+        FROM users
+        WHERE id = ?
+        """,
+        (session["user_id"],)
+    ).fetchone()
+
+    if not user:
+        session.clear()
+        return redirect(url_for("signup_page"))
+
+    if user["email_verified"]:
+        return redirect(url_for("terms_page"))
+
+    return render_template(
+        "verify_email.html",
+        email=user["email"],
+        first_name=user["first_name"]
+    )
+
+
+@app.route("/api/verify-email", methods=["POST"])
+@login_required
+def api_verify_email():
+    data = request.get_json(silent=True) or {}
+    code = (data.get("code") or "").strip()
+
+    if not re.fullmatch(r"\d{6}", code):
+        return jsonify({
+            "error": "Enter the 6-digit verification code."
+        }), 400
+
+    db = get_db()
+
+    user = db.execute(
+        """
+        SELECT
+            id,
+            email_verified,
+            verification_code_hash,
+            verification_expires_at
+        FROM users
+        WHERE id = ?
+        """,
+        (session["user_id"],)
+    ).fetchone()
+
+    if not user:
+        return jsonify({"error": "Account not found."}), 404
+
+    if user["email_verified"]:
+        return jsonify({
+            "ok": True,
+            "redirect": url_for("terms_page")
+        })
+
+    if not user["verification_code_hash"]:
+        return jsonify({
+            "error": "No verification code is available."
+        }), 400
+
+    try:
+        expires_at = datetime.fromisoformat(
+            user["verification_expires_at"]
+        )
+
+        if datetime.now() > expires_at:
+            return jsonify({
+                "error": "This verification code has expired."
+            }), 400
+
+    except Exception:
+        return jsonify({
+            "error": "Verification code is invalid."
+        }), 400
+
+    if not check_password_hash(
+        user["verification_code_hash"],
+        code
+    ):
+        return jsonify({
+            "error": "Incorrect verification code."
+        }), 400
+
+    db.execute(
+        """
+        UPDATE users
+        SET
+            email_verified = 1,
+            verification_code_hash = NULL,
+            verification_expires_at = NULL
+        WHERE id = ?
+        """,
+        (session["user_id"],)
+    )
+
+    db.commit()
+
+    return jsonify({
+        "ok": True,
+        "redirect": url_for("terms_page")
+    })
+
+
+@app.route("/api/resend-verification", methods=["POST"])
+@login_required
+def api_resend_verification():
+    db = get_db()
+
+    user = db.execute(
+        """
+        SELECT id, email, first_name, email_verified
+        FROM users
+        WHERE id = ?
+        """,
+        (session["user_id"],)
+    ).fetchone()
+
+    if not user:
+        return jsonify({"error": "Account not found."}), 404
+
+    if user["email_verified"]:
+        return jsonify({
+            "ok": True,
+            "redirect": url_for("terms_page")
+        })
+
+    code = f"{secrets.randbelow(1000000):06d}"
+
+    code_hash = generate_password_hash(code)
+
+    expires_at = (
+        datetime.now() +
+        timedelta(minutes=VERIFICATION_CODE_MINUTES)
+    ).isoformat()
+
+    try:
+        send_verification_email(
+            user["email"],
+            user["first_name"],
+            code
+        )
+
+        db.execute(
+            """
+            UPDATE users
+            SET
+                verification_code_hash = ?,
+                verification_expires_at = ?
+            WHERE id = ?
+            """,
+            (
+                code_hash,
+                expires_at,
+                user["id"]
+            )
+        )
+
+        db.commit()
+
+        return jsonify({
+            "ok": True,
+            "message": "A new verification code has been sent."
+        })
+
+    except Exception as e:
+        db.rollback()
+        print("NOVARA RESEND ERROR:", e)
+
+        return jsonify({
+            "error": "Unable to send the verification email."
+        }), 500
+
+
+
+# =========================
+# APP UPDATE
+# =========================
+@app.route("/download/latest")
+def download_latest():
+    return send_from_directory(BASE_DIR, "latest.apk", as_attachment=True)
+
+@app.route("/api/app-version")
+def app_version():
+    return jsonify({
+        "versionCode": 2,
+        "versionName": "1.0.1",
+        "apkUrl": url_for("download_latest", _external=True)
+    })
