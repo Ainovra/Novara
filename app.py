@@ -18,6 +18,8 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 from pypdf import PdfReader
 from authlib.integrations.flask_client import OAuth
+from google.oauth2 import id_token as google_id_token
+from google.auth.transport import requests as google_auth_requests
 
 try:
     import psycopg2
@@ -415,6 +417,65 @@ def api_signup():
             "error": "Password must contain a special character."
         }), 400
 
+    # NOVARA_COMMON_PASSWORD_CHECK
+    # Reject common/easily guessed passwords.
+    common_passwords = {
+        "password", "password1", "password123",
+        "12345678", "123456789", "1234567890",
+        "qwerty", "qwerty123", "abc123",
+        "letmein", "welcome", "welcome123",
+        "admin", "admin123", "iloveyou",
+        "monkey", "dragon", "football",
+        "00000000", "11111111"
+    }
+
+    password_lower = password.lower()
+
+    if password_lower in common_passwords:
+        return jsonify({
+            "error": "This password is too common. Please choose a stronger password."
+        }), 400
+
+    if password_lower == username.lower():
+        return jsonify({
+            "error": "Password cannot be the same as your username."
+        }), 400
+
+    if email and password_lower == email.split("@")[0].lower():
+        return jsonify({
+            "error": "Password cannot be based on your email address."
+        }), 400
+
+    # Reject commonly used passwords even when they satisfy complexity rules.
+    common_passwords = {
+        "password123!",
+        "password123",
+        "password1!",
+        "password!",
+        "qwerty123!",
+        "qwerty123",
+        "qwerty!",
+        "welcome123!",
+        "welcome123",
+        "letmein123!",
+        "letmein123",
+        "admin123!",
+        "admin123",
+        "abc12345!",
+        "abc12345",
+        "iloveyou123!",
+        "iloveyou123",
+        "changeme123!",
+        "changeme123",
+        "novara123!",
+        "novara123",
+    }
+
+    if password.lower() in common_passwords:
+        return jsonify({
+            "error": "That password is too common. Please choose a different password."
+        }), 400
+
     db = get_db()
 
     # Existing username
@@ -571,6 +632,53 @@ def auth_google_callback():
         session["user_id"] = user["id"]
         session["username"] = user["username"] or user["email"]
         return redirect(url_for("index") if user["terms_accepted"] else url_for("terms_page"))
+
+
+@app.route("/api/auth/google-native", methods=["POST"])
+def api_auth_google_native():
+    data = request.get_json(silent=True) or {}
+    token = data.get("id_token") or ""
+
+    if not token:
+        return jsonify({"error": "Missing token."}), 400
+
+    if not GOOGLE_CLIENT_ID:
+        return jsonify({"error": "Google login is not configured yet."}), 400
+
+    try:
+        idinfo = google_id_token.verify_oauth2_token(
+            token,
+            google_auth_requests.Request(),
+            GOOGLE_CLIENT_ID
+        )
+    except Exception as e:
+        print("GOOGLE NATIVE AUTH ERROR:", e)
+        return jsonify({"error": "Invalid Google token."}), 400
+
+    google_id = idinfo["sub"]
+    email = idinfo.get("email", "")
+    name = idinfo.get("name", email.split("@")[0] if email else "user")
+
+    db = get_db()
+    user = db.execute(
+        "SELECT * FROM users WHERE google_id = ?",
+        (google_id,)
+    ).fetchone()
+
+    if not user:
+        user_id = str(uuid.uuid4())
+        db.execute(
+            "INSERT INTO users (id, username, email, google_id, terms_accepted, created_at) VALUES (?, ?, ?, ?, 0, ?)",
+            (user_id, name, email, google_id, datetime.now().isoformat())
+        )
+        db.commit()
+        session["user_id"] = user_id
+        session["username"] = name
+        return jsonify({"ok": True})
+    else:
+        session["user_id"] = user["id"]
+        session["username"] = user["username"] or user["email"]
+        return jsonify({"ok": True})
 
 
 @app.route("/logout")
