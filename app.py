@@ -1437,7 +1437,7 @@ def download_latest():
 @app.route("/api/app-version")
 def app_version():
     return jsonify({
-        "versionCode": 2,
-        "versionName": "1.0.1",
+        "versionCode": 5,
+        "versionName": "1.5",
         "apkUrl": url_for("download_latest", _external=True)
     })
