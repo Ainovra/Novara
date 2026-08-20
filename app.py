@@ -681,6 +681,134 @@ def api_auth_google_native():
         return jsonify({"ok": True})
 
 
+
+@app.route("/api/account/delete", methods=["POST"])
+@login_required
+def api_account_delete():
+    data = request.get_json(silent=True) or {}
+    password = data.get("password") or ""
+
+    db = get_db()
+
+    user = db.execute(
+        "SELECT id, password_hash, google_id FROM users WHERE id = ?",
+        (session["user_id"],)
+    ).fetchone()
+
+    if not user:
+        session.clear()
+        return jsonify({"error": "Account not found."}), 404
+
+    # Password accounts must confirm their password.
+    # Google-only accounts can delete without a password.
+    if user["password_hash"]:
+        if not password or not check_password_hash(user["password_hash"], password):
+            return jsonify({"error": "Incorrect password."}), 401
+
+    user_id = user["id"]
+
+    try:
+        # Delete messages belonging to this user's conversations first.
+        db.execute(
+            """
+            DELETE FROM messages
+            WHERE conversation_id IN (
+                SELECT id FROM conversations WHERE user_id = ?
+            )
+            """,
+            (user_id,)
+        )
+
+        # Delete the user's conversations.
+        db.execute(
+            "DELETE FROM conversations WHERE user_id = ?",
+            (user_id,)
+        )
+
+        # Delete feedback submitted by the user.
+        db.execute(
+            "DELETE FROM feedback_events WHERE user_id = ?",
+            (user_id,)
+        )
+
+        # Delete per-user settings.
+        db.execute(
+            "DELETE FROM user_settings WHERE user_id = ?",
+            (user_id,)
+        )
+
+        # Finally delete the account.
+        db.execute(
+            "DELETE FROM users WHERE id = ?",
+            (user_id,)
+        )
+
+        db.commit()
+
+    except Exception:
+        db.rollback()
+        return jsonify({
+            "error": "Account deletion failed. Please try again."
+        }), 500
+
+    session.clear()
+
+    return jsonify({
+        "ok": True,
+        "redirect": url_for("account_deleted")
+    })
+
+
+@app.route("/account/delete-request")
+def account_delete_request():
+    db = get_db()
+
+    logged_in = bool(session.get("user_id"))
+    has_password = False
+
+    if logged_in:
+        user = db.execute(
+            "SELECT password_hash FROM users WHERE id = ?",
+            (session["user_id"],)
+        ).fetchone()
+        has_password = bool(user and user["password_hash"])
+
+    return render_template(
+        "account-delete.html",
+        logged_in=logged_in,
+        has_password=has_password,
+        contact_email=os.getenv("CONTACT_EMAIL", "support@novara.app")
+    )
+
+
+@app.route("/account/deleted")
+def account_deleted():
+    return render_template("account-deleted.html")
+
+
+
+@app.route("/api/me", methods=["GET"])
+def api_me():
+    if "user_id" not in session:
+        return jsonify({"ok": False, "error": "Not logged in"}), 401
+    db = get_db()
+    user = db.execute(
+        "SELECT username, email, phone_number, google_id, created_at FROM users WHERE id = ?",
+        (session["user_id"],)
+    ).fetchone()
+    if not user:
+        return jsonify({"ok": False, "error": "User not found"}), 404
+    return jsonify({
+        "ok": True,
+        "username": user["username"],
+        "email": user["email"],
+        "phone_number": user["phone_number"],
+        "is_guest": user["email"] is None and user["google_id"] is None,
+        "signed_in_with_google": user["google_id"] is not None,
+        "created_at": user["created_at"]
+    })
+
+
 @app.route("/logout")
 def logout():
     session.clear()

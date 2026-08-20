@@ -1,13 +1,19 @@
 package com.novara.app
 
 import android.content.Intent
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
+import okhttp3.MediaType.Companion.toMediaType
 import android.os.Bundle
 import android.net.Uri
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -23,14 +29,22 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.lifecycleScope
 import com.novara.app.network.ApiClient
+import org.json.JSONObject
+import java.net.HttpURLConnection
+import java.net.URL
 import com.novara.app.ui.screens.ChatScreen
 import com.novara.app.ui.theme.NovaraTheme
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 private val NovaraBg = Color(0xFF071018)
 private val NovaraCard = Color(0xFF101D27)
@@ -50,6 +64,28 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         handleIntent(intent)
+
+        lifecycleScope.launch {
+            val update = UpdateManager.check()
+            if (update != null) {
+                runOnUiThread {
+                    android.app.AlertDialog.Builder(this@MainActivity)
+                        .setTitle("Novara update available")
+                        .setMessage(
+                            "Novara ${update.versionName} is available.\\n\\n" +
+                            "You are using version ${BuildConfig.VERSION_NAME}."
+                        )
+                        .setNegativeButton("Later", null)
+                        .setPositiveButton("Update") { _, _ ->
+                            UpdateManager.downloadAndInstall(
+                                this@MainActivity,
+                                update
+                            )
+                        }
+                        .show()
+                }
+            }
+        }
 
         setContent {
             NovaraTheme {
@@ -146,6 +182,8 @@ private fun NovaraNativeApp(
         )
     }
 
+    val guestScope = rememberCoroutineScope()
+
     var onboardingPage by remember {
         mutableIntStateOf(0)
     }
@@ -193,15 +231,59 @@ private fun NovaraNativeApp(
                 onGoogle = {
                     onGoogleLogin()
                 },
-                onEmail = {
-                    // Email flow can be connected to the existing backend next.
-                },
-                onGuest = {
+                onSignupSuccess = {
                     prefs.edit()
                         .putBoolean("logged_in", true)
                         .apply()
                     loggedIn = true
                     showNovaraSplash = true
+                },
+                onGuest = { onDone ->
+                    guestScope.launch {
+                        var attempt = 0
+                        var guestReady = false
+
+                        while (attempt < 5 && !guestReady) {
+                            val result = apiPost("/api/guest", JSONObject())
+
+                            if (result.first) {
+                                val termsResult =
+                                    apiPost("/api/accept-terms", JSONObject())
+
+                                guestReady = termsResult.first
+
+                                if (!guestReady) {
+                                    android.util.Log.e(
+                                        "Novara",
+                                        "Guest session created but terms acceptance failed: ${termsResult.second}"
+                                    )
+                                }
+                            }
+
+                            if (!guestReady) {
+                                attempt++
+                                if (attempt < 5) {
+                                    kotlinx.coroutines.delay(2000)
+                                }
+                            }
+                        }
+
+                        if (guestReady) {
+                            prefs.edit()
+                                .putBoolean("logged_in", true)
+                                .apply()
+
+                            loggedIn = true
+                            showNovaraSplash = true
+                        } else {
+                            android.widget.Toast.makeText(
+                                context,
+                                "Couldn't start guest session. Please try again.",
+                                android.widget.Toast.LENGTH_LONG
+                            ).show()
+                            onDone()
+                        }
+                    }
                 }
             )
         }
@@ -214,7 +296,51 @@ private fun NovaraNativeApp(
                     }
                 )
             } else {
+                var updateInfo by remember { mutableStateOf<Triple<Int, String, String>?>(null) }
+                val updateScope = rememberCoroutineScope()
+
+                LaunchedEffect(Unit) {
+                    val result = apiGet("/api/app-version")
+                    if (result.first) {
+                        try {
+                            val json = JSONObject(result.second)
+                            val serverCode = json.optInt("versionCode", -1)
+                            val serverName = json.optString("versionName", "")
+                            val apkUrl = json.optString("apkUrl", "")
+
+                            if (serverCode > BuildConfig.VERSION_CODE && apkUrl.isNotEmpty()) {
+                                updateInfo = Triple(serverCode, serverName, apkUrl)
+                            }
+                        } catch (_: Exception) {
+                        }
+                    }
+                }
+
                 ChatScreen()
+
+                val info = updateInfo
+                if (info != null) {
+                    androidx.compose.material3.AlertDialog(
+                        onDismissRequest = { updateInfo = null },
+                        title = { Text("Update available") },
+                        text = { Text("Novara ${'$'}{info.second} is available. Update now for the latest fixes and features.") },
+                        confirmButton = {
+                            androidx.compose.material3.TextButton(onClick = {
+                                val ctx = context
+                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(info.third))
+                                ctx.startActivity(intent)
+                                updateInfo = null
+                            }) {
+                                Text("Update")
+                            }
+                        },
+                        dismissButton = {
+                            androidx.compose.material3.TextButton(onClick = { updateInfo = null }) {
+                                Text("Later")
+                            }
+                        }
+                    )
+                }
             }
         }
     }
@@ -583,12 +709,129 @@ private fun TermsSection(
     }
 }
 
+private val NOVARA_COMMON_PASSWORDS = setOf(
+    "password",
+    "password1",
+    "password123",
+    "password1234",
+    "123456",
+    "1234567",
+    "12345678",
+    "123456789",
+    "1234567890",
+    "qwerty",
+    "qwerty123",
+    "abc123",
+    "letmein",
+    "welcome",
+    "welcome123",
+    "admin",
+    "admin123",
+    "iloveyou",
+    "monkey",
+    "dragon",
+    "football",
+    "login",
+    "passw0rd",
+    "changeme"
+)
+
+private suspend fun apiGet(
+    path: String
+): Pair<Boolean, String> = withContext(Dispatchers.IO) {
+    try {
+        val request = Request.Builder()
+            .url(BuildConfig.WEB_BASE_URL.trimEnd('/') + path)
+            .get()
+            .build()
+
+        com.novara.app.network.ApiClient.client.newCall(request).execute().use { response ->
+            val text = response.body?.string().orEmpty()
+            Pair(response.isSuccessful, text)
+        }
+    } catch (e: Exception) {
+        Pair(false, e.message ?: "Network error")
+    }
+}
+
+private suspend fun apiPost(
+    path: String,
+    json: JSONObject
+): Pair<Boolean, String> = withContext(Dispatchers.IO) {
+    try {
+        val mediaType = "application/json; charset=utf-8".toMediaType()
+        val body = json.toString().toRequestBody(mediaType)
+        val request = Request.Builder()
+            .url(BuildConfig.WEB_BASE_URL.trimEnd('/') + path)
+            .post(body)
+            .build()
+
+        com.novara.app.network.ApiClient.client.newCall(request).execute().use { response ->
+            val text = response.body?.string().orEmpty()
+            Pair(response.isSuccessful, text)
+        }
+    } catch (e: Exception) {
+        Pair(false, e.message ?: "Network error")
+    }
+}
+
+private fun extractApiError(raw: String, fallback: String): String {
+    return try {
+        JSONObject(raw).optString("error", fallback)
+    } catch (_: Exception) {
+        if (raw.isNotBlank()) raw.take(120) else fallback
+    }
+}
+
 @Composable
 private fun LoginScreenNative(
     onGoogle: () -> Unit,
-    onEmail: () -> Unit,
-    onGuest: () -> Unit
+    onSignupSuccess: () -> Unit,
+    onGuest: (onDone: () -> Unit) -> Unit
 ) {
+    var step by remember { mutableStateOf("home") }
+
+    var loginEmail by remember { mutableStateOf("") }
+    var loginPassword by remember { mutableStateOf("") }
+
+    var firstName by remember { mutableStateOf("") }
+    var lastName by remember { mutableStateOf("") }
+    var username by remember { mutableStateOf("") }
+    var signupEmail by remember { mutableStateOf("") }
+    var phone by remember { mutableStateOf("") }
+
+    var password by remember { mutableStateOf("") }
+    var confirmPassword by remember { mutableStateOf("") }
+
+    var code by remember { mutableStateOf("") }
+
+    var errorMessage by remember { mutableStateOf<String?>(null) }
+    var busy by remember { mutableStateOf(false) }
+    var guestBusy by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+    val credentialManager = remember { androidx.credentials.CredentialManager.create(context) }
+
+    val hasMinLen = password.length >= 8
+    val hasUpper = password.any { it.isUpperCase() }
+    val hasLower = password.any { it.isLowerCase() }
+    val hasDigit = password.any { it.isDigit() }
+    val hasSpecial = password.any { !it.isLetterOrDigit() }
+    val notCommon = password.lowercase() !in NOVARA_COMMON_PASSWORDS
+    val passwordsMatch = password.isNotEmpty() && password == confirmPassword
+    val passwordValid = hasMinLen && hasUpper && hasLower && hasDigit && hasSpecial && notCommon
+
+    androidx.activity.compose.BackHandler(enabled = step != "home") {
+        errorMessage = null
+        step = when (step) {
+            "login" -> "home"
+            "signupInfo" -> "home"
+            "signupPassword" -> "signupInfo"
+            "verifyEmail" -> "verifyEmail"
+            else -> "home"
+        }
+    }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -617,63 +860,511 @@ private fun LoginScreenNative(
                 Spacer(Modifier.height(15.dp))
 
                 Text(
-                    "Novara",
+                    when (step) {
+                        "login" -> "Log in"
+                        "signupInfo" -> "Create your account"
+                        "signupPassword" -> "Set a password"
+                        "verifyEmail" -> "Verify your email"
+                        else -> "Novara"
+                    },
                     color = NovaraText,
-                    fontSize = 29.sp,
+                    fontSize = 27.sp,
                     fontWeight = FontWeight.Bold
                 )
 
                 Text(
-                    "Log in to your account",
+                    when (step) {
+                        "login" -> "Enter your email and password"
+                        "signupInfo" -> "Join Novara in seconds"
+                        "signupPassword" -> "Almost done"
+                        "verifyEmail" -> "Enter the 6-digit code we emailed you"
+                        else -> "Log in to your account"
+                    },
                     color = NovaraMuted,
                     fontSize = 15.sp
                 )
 
                 Spacer(Modifier.height(24.dp))
 
-                LoginButton(
-                    text = "🌈   Continue with Google",
-                    light = true,
-                    onClick = onGoogle
-                )
-
-                Spacer(Modifier.height(11.dp))
-
-                LoginButton(
-                    text = "✉   Continue with email",
-                    light = true,
-                    onClick = onEmail
-                )
-
-                Spacer(Modifier.height(18.dp))
-
-                Row {
+                if (errorMessage != null) {
                     Text(
-                        "Don't have an account? ",
-                        color = NovaraMuted,
-                        fontSize = 14.sp
-                    )
-
-                    Text(
-                        "Sign up",
-                        color = NovaraYellow,
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Bold
+                        errorMessage ?: "",
+                        color = Color(0xFFEF5350),
+                        fontSize = 13.sp,
+                        modifier = Modifier.padding(bottom = 12.dp)
                     )
                 }
 
-                Spacer(Modifier.height(17.dp))
+                when (step) {
+                    "home" -> {
+                        Button(
+                            onClick = {
+                                scope.launch {
+                                    try {
+                                        val googleIdOption = com.google.android.libraries.identity.googleid.GetGoogleIdOption.Builder()
+                                            .setFilterByAuthorizedAccounts(false)
+                                            .setServerClientId("918089443296-5v1ec7dp1rgc331fpgv3j1k568ok99s2.apps.googleusercontent.com")
+                                            .build()
 
-                Text(
-                    "Skip — continue as guest",
-                    color = NovaraMuted,
-                    fontSize = 14.sp,
-                    modifier = Modifier.clickable {
-                        onGuest()
+                                        val request = androidx.credentials.GetCredentialRequest.Builder()
+                                            .addCredentialOption(googleIdOption)
+                                            .build()
+
+                                        val cmResult = credentialManager.getCredential(
+                                            request = request,
+                                            context = context
+                                        )
+
+                                        val credential = cmResult.credential
+                                        if (credential is androidx.credentials.CustomCredential &&
+                                            credential.type == com.google.android.libraries.identity.googleid.GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL
+                                        ) {
+                                            val googleIdTokenCredential =
+                                                com.google.android.libraries.identity.googleid.GoogleIdTokenCredential.createFrom(credential.data)
+
+                                            val apiResult = apiPost(
+                                                "/api/auth/google-native",
+                                                JSONObject().put("id_token", googleIdTokenCredential.idToken)
+                                            )
+
+                                            if (apiResult.first) {
+                                                apiPost("/api/accept-terms", JSONObject())
+                                                onSignupSuccess()
+                                            } else {
+                                                errorMessage = extractApiError(apiResult.second, "Google sign-in failed")
+                                            }
+                                        } else {
+                                            errorMessage = "Google sign-in failed"
+                                        }
+                                    } catch (e: Exception) {
+                                        errorMessage = e.message ?: "Google sign-in failed"
+                                    }
+                                }
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(54.dp),
+                            shape = RoundedCornerShape(13.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = Color(0xFFF7F8F8),
+                                contentColor = Color(0xFF182027)
+                            )
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.Center
+                            ) {
+                                Text(
+                                    "G",
+                                    color = Color(0xFF4285F4),
+                                    fontSize = 22.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Spacer(Modifier.width(10.dp))
+                                Text("Continue with Google", fontSize = 15.sp)
+                            }
+                        }
+
+                        Spacer(Modifier.height(11.dp))
+
+                        LoginButton(
+                            text = "Continue with email",
+                            light = true,
+                            onClick = { errorMessage = null; step = "login" }
+                        )
+
+                        Spacer(Modifier.height(18.dp))
+
+                        Row {
+                            Text(
+                                "Don't have an account? ",
+                                color = NovaraMuted,
+                                fontSize = 14.sp
+                            )
+                            Text(
+                                "Sign up",
+                                color = NovaraYellow,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.clickable { errorMessage = null; step = "signupInfo" }
+                            )
+                        }
+
+                        Spacer(Modifier.height(17.dp))
+
+                        Text(
+                            if (guestBusy) "Starting..." else "Skip - continue as guest",
+                            color = NovaraMuted,
+                            fontSize = 14.sp,
+                            modifier = Modifier.clickable(enabled = !guestBusy) {
+                                guestBusy = true
+                                onGuest { guestBusy = false }
+                            }
+                        )
                     }
-                )
+
+                    "login" -> {
+                        OutlinedTextField(
+                            value = loginEmail,
+                            onValueChange = { loginEmail = it },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                            label = { Text("Email") },
+                            shape = RoundedCornerShape(13.dp)
+                        )
+
+                        Spacer(Modifier.height(12.dp))
+
+                        OutlinedTextField(
+                            value = loginPassword,
+                            onValueChange = { loginPassword = it },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                            label = { Text("Password") },
+                            visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                            shape = RoundedCornerShape(13.dp)
+                        )
+
+                        Spacer(Modifier.height(17.dp))
+
+                        val loginValid = loginEmail.trim().isNotEmpty() && loginPassword.isNotEmpty()
+
+                        Button(
+                            onClick = {
+                                if (!loginValid || busy) return@Button
+                                errorMessage = null
+                                busy = true
+
+                                scope.launch {
+                                    val result = apiPost(
+                                        "/api/login",
+                                        JSONObject()
+                                            .put("username", loginEmail.trim())
+                                            .put("password", loginPassword)
+                                    )
+
+                                    busy = false
+
+                                    if (result.first) {
+                                        apiPost("/api/accept-terms", JSONObject())
+                                        onSignupSuccess()
+                                    } else {
+                                        errorMessage = extractApiError(result.second, "Log in failed")
+                                    }
+                                }
+                            },
+                            enabled = !busy && loginValid,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(54.dp),
+                            shape = RoundedCornerShape(13.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = NovaraYellow,
+                                contentColor = Color(0xFF302500)
+                            )
+                        ) {
+                            Text(
+                                if (busy) "Logging in..." else "Log in",
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+
+                        Spacer(Modifier.height(13.dp))
+
+                        Text(
+                            "Back",
+                            color = NovaraMuted,
+                            fontSize = 14.sp,
+                            modifier = Modifier.clickable { errorMessage = null; step = "home" }
+                        )
+                    }
+
+                    "signupInfo" -> {
+                        OutlinedTextField(
+                            value = firstName,
+                            onValueChange = { firstName = it },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                            label = { Text("First name") },
+                            shape = RoundedCornerShape(13.dp)
+                        )
+
+                        Spacer(Modifier.height(12.dp))
+
+                        OutlinedTextField(
+                            value = lastName,
+                            onValueChange = { lastName = it },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                            label = { Text("Last name") },
+                            shape = RoundedCornerShape(13.dp)
+                        )
+
+                        Spacer(Modifier.height(12.dp))
+
+                        OutlinedTextField(
+                            value = username,
+                            onValueChange = { username = it },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                            label = { Text("Username") },
+                            shape = RoundedCornerShape(13.dp)
+                        )
+
+                        Spacer(Modifier.height(12.dp))
+
+                        OutlinedTextField(
+                            value = signupEmail,
+                            onValueChange = { signupEmail = it },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                            label = { Text("Email") },
+                            shape = RoundedCornerShape(13.dp)
+                        )
+
+                        Spacer(Modifier.height(12.dp))
+
+                        OutlinedTextField(
+                            value = phone,
+                            onValueChange = { phone = it },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                            label = { Text("Phone (optional)") },
+                            shape = RoundedCornerShape(13.dp)
+                        )
+
+                        Spacer(Modifier.height(17.dp))
+
+                        Button(
+                            onClick = {
+                                errorMessage = when {
+                                    firstName.trim().isEmpty() -> "First name is required."
+                                    lastName.trim().isEmpty() -> "Last name is required."
+                                    username.trim().length < 3 -> "Username must be at least 3 characters."
+                                    !signupEmail.contains("@") || !signupEmail.contains(".") -> "Enter a valid email."
+                                    else -> null
+                                }
+
+                                if (errorMessage == null) {
+                                    step = "signupPassword"
+                                }
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(54.dp),
+                            shape = RoundedCornerShape(13.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = NovaraYellow,
+                                contentColor = Color(0xFF302500)
+                            )
+                        ) {
+                            Text(
+                                "Next",
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+
+                        Spacer(Modifier.height(13.dp))
+
+                        Text(
+                            "Already have an account? Log in",
+                            color = NovaraMuted,
+                            fontSize = 14.sp,
+                            modifier = Modifier.clickable { errorMessage = null; step = "login" }
+                        )
+                    }
+
+                    "signupPassword" -> {
+                        OutlinedTextField(
+                            value = password,
+                            onValueChange = { password = it },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                            label = { Text("Password") },
+                            visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                            shape = RoundedCornerShape(13.dp)
+                        )
+
+                        Spacer(Modifier.height(10.dp))
+
+                        Column(modifier = Modifier.fillMaxWidth().padding(start = 4.dp)) {
+                            PasswordRuleLine("At least 8 characters", hasMinLen)
+                            PasswordRuleLine("An uppercase letter", hasUpper)
+                            PasswordRuleLine("A lowercase letter", hasLower)
+                            PasswordRuleLine("A number", hasDigit)
+                            PasswordRuleLine("A special character", hasSpecial)
+                        }
+
+                        Spacer(Modifier.height(12.dp))
+
+                        OutlinedTextField(
+                            value = confirmPassword,
+                            onValueChange = { confirmPassword = it },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                            label = { Text("Re-enter your password") },
+                            visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                            shape = RoundedCornerShape(13.dp)
+                        )
+
+                        Spacer(Modifier.height(17.dp))
+
+                        Button(
+                            onClick = {
+                                if (!passwordValid) {
+                                    errorMessage = "Please meet all password requirements."
+                                    return@Button
+                                }
+
+                                if (!passwordsMatch) {
+                                    errorMessage = "Passwords don't match."
+                                    return@Button
+                                }
+
+                                if (busy) return@Button
+                                errorMessage = null
+                                busy = true
+
+                                scope.launch {
+                                    val result = apiPost(
+                                        "/api/signup",
+                                        JSONObject()
+                                            .put("first_name", firstName.trim())
+                                            .put("last_name", lastName.trim())
+                                            .put("username", username.trim())
+                                            .put("email", signupEmail.trim())
+                                            .put("phone_number", phone.trim())
+                                            .put("password", password)
+                                            .put("confirm_password", confirmPassword)
+                                    )
+
+                                    busy = false
+
+                                    if (result.first) {
+                                        step = "verifyEmail"
+                                    } else {
+                                        errorMessage = extractApiError(result.second, "Sign up failed")
+                                    }
+                                }
+                            },
+                            enabled = !busy,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(54.dp),
+                            shape = RoundedCornerShape(13.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = NovaraYellow,
+                                contentColor = Color(0xFF302500)
+                            )
+                        ) {
+                            Text(
+                                if (busy) "Creating account..." else "Create account",
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+
+                        Spacer(Modifier.height(13.dp))
+
+                        Text(
+                            "Back",
+                            color = NovaraMuted,
+                            fontSize = 14.sp,
+                            modifier = Modifier.clickable { errorMessage = null; step = "signupInfo" }
+                        )
+                    }
+
+                    "verifyEmail" -> {
+                        OutlinedTextField(
+                            value = code,
+                            onValueChange = { if (it.length <= 6 && it.all { c -> c.isDigit() }) code = it },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                            label = { Text("6-digit code") },
+                            shape = RoundedCornerShape(13.dp)
+                        )
+
+                        Spacer(Modifier.height(17.dp))
+
+                        Button(
+                            onClick = {
+                                if (code.length != 6 || busy) return@Button
+                                errorMessage = null
+                                busy = true
+
+                                scope.launch {
+                                    val result = apiPost(
+                                        "/api/verify-email",
+                                        JSONObject().put("code", code)
+                                    )
+
+                                    busy = false
+
+                                    if (result.first) {
+                                        apiPost("/api/accept-terms", JSONObject())
+                                        onSignupSuccess()
+                                    } else {
+                                        errorMessage = extractApiError(result.second, "Verification failed")
+                                    }
+                                }
+                            },
+                            enabled = !busy && code.length == 6,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(54.dp),
+                            shape = RoundedCornerShape(13.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = NovaraYellow,
+                                contentColor = Color(0xFF302500)
+                            )
+                        ) {
+                            Text(
+                                if (busy) "Verifying..." else "Verify",
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+
+                        Spacer(Modifier.height(13.dp))
+
+                        Text(
+                            "Resend code",
+                            color = NovaraMuted,
+                            fontSize = 14.sp,
+                            modifier = Modifier.clickable {
+                                scope.launch {
+                                    val result = apiPost("/api/resend-verification", JSONObject())
+                                    Toast.makeText(
+                                        context,
+                                        if (result.first) "Code resent" else extractApiError(result.second, "Could not resend code"),
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                }
+                            }
+                        )
+                    }
+                }
             }
         }
+    }
+}
+
+@Composable
+private fun PasswordRuleLine(label: String, met: Boolean) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(
+            if (met) "\u2713" else "\u2022",
+            color = if (met) Color(0xFF4CAF50) else NovaraMuted,
+            fontSize = 13.sp,
+            modifier = Modifier.width(18.dp)
+        )
+        Text(
+            label,
+            color = if (met) Color(0xFF4CAF50) else NovaraMuted,
+            fontSize = 13.sp
+        )
     }
 }
 
@@ -731,185 +1422,6 @@ private fun NovaraLogo() {
             fontSize = 31.sp,
             color = NovaraBlue
         )
-    }
-}
-
-@Composable
-private fun ChatScreen() {
-    var message by remember { mutableStateOf("") }
-    var dark by remember { mutableStateOf(true) }
-
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(
-                if (dark) NovaraBg else Color(0xFFF5F7F8)
-            )
-    ) {
-        Column(
-            modifier = Modifier.fillMaxSize()
-        ) {
-
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(68.dp)
-                    .padding(horizontal = 14.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(43.dp)
-                        .clip(RoundedCornerShape(13.dp))
-                        .background(NovaraCard)
-                        .clickable { },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        "☰",
-                        color = NovaraText,
-                        fontSize = 22.sp
-                    )
-                }
-
-                Text(
-                    "Novara",
-                    color = if (dark) NovaraText else Color(0xFF111820),
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold
-                )
-
-                Box(
-                    modifier = Modifier
-                        .size(43.dp)
-                        .clip(RoundedCornerShape(13.dp))
-                        .background(NovaraCard)
-                        .clickable {
-                            dark = !dark
-                        },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        "☾",
-                        color = NovaraYellow,
-                        fontSize = 23.sp
-                    )
-                }
-            }
-
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                FeatureChip("•  Web search")
-                FeatureChip("•  🖼  Create Image")
-            }
-
-            Spacer(Modifier.weight(1f))
-
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 28.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Text(
-                    "Novara",
-                    color = if (dark) NovaraText else Color(0xFF111820),
-                    fontSize = 40.sp,
-                    fontWeight = FontWeight.Bold
-                )
-
-                Spacer(Modifier.height(12.dp))
-
-                Text(
-                    "Ask anything — text, photo, PDF, voice, or\nask me to create an image.",
-                    color = if (dark) NovaraText else Color(0xFF25313A),
-                    fontSize = 17.sp,
-                    lineHeight = 25.sp
-                )
-            }
-
-            Spacer(Modifier.weight(1f))
-
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(
-                        start = 12.dp,
-                        end = 12.dp,
-                        bottom = 14.dp
-                    )
-                    .clip(RoundedCornerShape(18.dp))
-                    .background(
-                        if (dark) Color(0xFF14222C)
-                        else Color(0xFFE7ECEF)
-                    )
-                    .border(
-                        1.dp,
-                        if (dark) NovaraBorder
-                        else Color(0xFFD2D9DE),
-                        RoundedCornerShape(18.dp)
-                    )
-                    .padding(9.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-
-                Text(
-                    "⌕",
-                    color = NovaraBlue,
-                    fontSize = 23.sp,
-                    modifier = Modifier.padding(horizontal = 8.dp)
-                )
-
-                Text(
-                    "⚡",
-                    color = NovaraYellow,
-                    fontSize = 20.sp
-                )
-
-                Spacer(Modifier.width(8.dp))
-
-                Box(
-                    modifier = Modifier.weight(1f)
-                ) {
-                    if (message.isEmpty()) {
-                        Text(
-                            "Message Novara...",
-                            color = NovaraMuted,
-                            fontSize = 15.sp
-                        )
-                    }
-
-                    BasicTextField(
-                        value = message,
-                        onValueChange = { message = it },
-                        modifier = Modifier.fillMaxWidth(),
-                        textStyle = TextStyle(
-                            color = NovaraText,
-                            fontSize = 15.sp
-                        ),
-                        singleLine = true
-                    )
-                }
-
-                Text(
-                    "🎙",
-                    color = NovaraText,
-                    fontSize = 20.sp,
-                    modifier = Modifier.padding(horizontal = 8.dp)
-                )
-
-                Text(
-                    "↑",
-                    color = NovaraText,
-                    fontSize = 23.sp
-                )
-            }
-        }
     }
 }
 
