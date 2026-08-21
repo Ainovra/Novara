@@ -33,6 +33,7 @@ except ImportError:
 # =========================
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")
 ADMIN_SECRET = os.getenv("ADMIN_SECRET", "")
 GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")
 GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "")
@@ -945,6 +946,33 @@ def call_gemini(parts, timeout=60):
         return None, str(e)
 
 
+def call_deepseek(prompt_text, timeout=60):
+    if not DEEPSEEK_API_KEY:
+        return None, "DEEPSEEK_API_KEY not set on server."
+
+    try:
+        response = requests.post(
+            "https://api.deepseek.com/chat/completions",
+            headers={
+                "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
+                "Content-Type": "application/json"
+            },
+            json={
+                "model": "deepseek-chat",
+                "messages": [{"role": "user", "content": prompt_text}],
+                "stream": False
+            },
+            timeout=timeout
+        )
+        data = response.json()
+        if "choices" not in data:
+            err = data.get("error", {})
+            return None, err.get("message", str(data)) if isinstance(err, dict) else str(data)
+        return data["choices"][0]["message"]["content"], None
+    except Exception as e:
+        return None, str(e)
+
+
 def ask_ai(question, recent_messages, pdf_context="", image_path=None, web_context=""):
     recent = "\n".join(f"{'User' if m['role']=='user' else 'Novara'}: {m['text']}" for m in recent_messages[-10:])
     prompt = f"""
@@ -969,16 +997,12 @@ WEB SEARCH RESULTS:
 USER MESSAGE:
 {question}
 """
-    parts = [{"text": prompt}]
-
     if image_path and os.path.exists(image_path):
         mime_type, _ = mimetypes.guess_type(image_path)
         if mime_type and mime_type.startswith("image/"):
-            with open(image_path, "rb") as f:
-                b64 = base64.b64encode(f.read()).decode("utf-8")
-            parts.append({"inline_data": {"mime_type": mime_type, "data": b64}})
+            return "I can't view or analyze images just yet, but that's coming soon. In the meantime, feel free to describe what's in the photo and I'll help however I can!"
 
-    text, error = call_gemini(parts)
+    text, error = call_deepseek(prompt)
     if error:
         return "Sorry, I couldn't get a response right now. Please try again in a moment."
     return text
