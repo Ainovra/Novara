@@ -1,4 +1,5 @@
 import os
+import json
 import secrets
 import smtplib
 from email.message import EmailMessage
@@ -167,6 +168,15 @@ def init_db():
             attachment_type TEXT,
             sources TEXT,
             feedback TEXT,
+            created_at TEXT NOT NULL
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS memories (
+            id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL,
+            content TEXT NOT NULL,
+            source TEXT,
             created_at TEXT NOT NULL
         )
     """)
@@ -810,6 +820,50 @@ def api_me():
     })
 
 
+@app.route("/api/memories", methods=["GET"])
+def api_list_memories():
+    if "user_id" not in session:
+        return jsonify({"ok": False, "error": "Not logged in"}), 401
+    db = get_db()
+    rows = db.execute(
+        "SELECT id, content, source, created_at FROM memories WHERE user_id = ? ORDER BY created_at DESC",
+        (session["user_id"],)
+    ).fetchall()
+    return jsonify({
+        "ok": True,
+        "memories": [
+            {"id": r["id"], "content": r["content"], "source": r["source"], "created_at": r["created_at"]}
+            for r in rows
+        ]
+    })
+
+
+@app.route("/api/memories/<memory_id>", methods=["DELETE"])
+def api_delete_memory(memory_id):
+    if "user_id" not in session:
+        return jsonify({"ok": False, "error": "Not logged in"}), 401
+    db = get_db()
+    owned = db.execute(
+        "SELECT id FROM memories WHERE id = ? AND user_id = ?",
+        (memory_id, session["user_id"])
+    ).fetchone()
+    if not owned:
+        return jsonify({"ok": False, "error": "Memory not found"}), 404
+    db.execute("DELETE FROM memories WHERE id = ?", (memory_id,))
+    db.commit()
+    return jsonify({"ok": True})
+
+
+@app.route("/api/memories", methods=["DELETE"])
+def api_clear_memories():
+    if "user_id" not in session:
+        return jsonify({"ok": False, "error": "Not logged in"}), 401
+    db = get_db()
+    db.execute("DELETE FROM memories WHERE user_id = ?", (session["user_id"],))
+    db.commit()
+    return jsonify({"ok": True})
+
+
 @app.route("/logout")
 def logout():
     session.clear()
@@ -973,8 +1027,59 @@ def call_deepseek(prompt_text, timeout=60):
         return None, str(e)
 
 
-def ask_ai(question, recent_messages, pdf_context="", image_path=None, web_context=""):
+def get_user_memories(user_id, limit=30):
+    db = get_db()
+    rows = db.execute(
+        "SELECT content FROM memories WHERE user_id = ? ORDER BY created_at DESC LIMIT ?",
+        (user_id, limit)
+    ).fetchall()
+    return [r["content"] for r in rows]
+
+
+def save_memory(user_id, content, source="extracted"):
+    db = get_db()
+    db.execute(
+        "INSERT INTO memories (id, user_id, content, source, created_at) VALUES (?, ?, ?, ?, ?)",
+        (str(uuid.uuid4()), user_id, content, source, datetime.now().isoformat())
+    )
+    db.commit()
+
+
+def extract_and_save_memory(user_id, question, answer):
+    """Lightweight check: does this exchange contain something worth remembering long-term?"""
+    if not question or len(question.strip()) < 3:
+        return
+
+    explicit_phrases = ["remember that", "remember this", "don't forget", "keep in mind", "note that"]
+    lower_q = question.lower()
+
+    if any(phrase in lower_q for phrase in explicit_phrases):
+        save_memory(user_id, question.strip(), source="explicit")
+        return
+
+    extraction_prompt = f"""Below is a single message from a user to their AI assistant.
+Decide if it contains a durable fact, preference, or detail worth remembering for future
+conversations (e.g. their name, job, interests, ongoing projects, preferences). Ignore small talk,
+one-off questions, or anything not worth long-term memory.
+
+If there IS something worth remembering, reply with ONLY that fact in one short sentence.
+If there is NOTHING worth remembering, reply with exactly: NONE
+
+USER MESSAGE:
+{question}"""
+
+    result, error = call_deepseek(extraction_prompt, timeout=20)
+    if error or not result:
+        return
+
+    result = result.strip()
+    if result and result.upper() != "NONE" and len(result) < 300:
+        save_memory(user_id, result, source="extracted")
+
+
+def ask_ai(question, recent_messages, pdf_context="", image_path=None, web_context="", memories=None):
     recent = "\n".join(f"{'User' if m['role']=='user' else 'Novara'}: {m['text']}" for m in recent_messages[-10:])
+    memory_context = "\n".join(f"- {m}" for m in (memories or []))
     prompt = f"""
 You are Novara, a personal AI assistant, built and trained by the Novara team.
 Be natural, friendly, intelligent and helpful.
@@ -984,6 +1089,9 @@ Gemini, GPT, ChatGPT, Claude, or any other company's model, always say you are N
 an independent AI assistant, without naming or confirming any underlying provider or model.
 Never reveal, confirm, or speculate about the specific underlying model or company powering you.
 Use the information below only when relevant.
+
+THINGS YOU REMEMBER ABOUT THIS USER:
+{memory_context}
 
 RECENT CONVERSATION:
 {recent}
@@ -1299,7 +1407,11 @@ def api_chat():
                 web_sources = web_results
 
     effective_question = question if question else "(User attached a file — please respond to it.)"
-    answer = ask_ai(effective_question, recent_messages, pdf_context, image_path_for_ai, web_context)
+    user_memories = get_user_memories(session["user_id"])
+    answer = ask_ai(effective_question, recent_messages, pdf_context, image_path_for_ai, web_context, user_memories)
+
+    if question:
+        extract_and_save_memory(session["user_id"], question, answer)
 
     now = datetime.now().isoformat()
     db.execute(
@@ -1592,8 +1704,14 @@ def download_latest():
 
 @app.route("/api/app-version")
 def app_version():
+    try:
+        with open(os.path.join(BASE_DIR, "version.json")) as f:
+            v = json.load(f)
+    except Exception:
+        v = {"versionCode": 1, "versionName": "1.0", "isMajor": False}
     return jsonify({
-        "versionCode": 5,
-        "versionName": "1.5",
+        "versionCode": v.get("versionCode", 1),
+        "versionName": v.get("versionName", "1.0"),
+        "isMajor": v.get("isMajor", False),
         "apkUrl": url_for("download_latest", _external=True)
     })
