@@ -480,6 +480,7 @@ private fun NovaraNativeApp(
                         if (guestReady) {
                             prefs.edit()
                                 .putBoolean("logged_in", true)
+                                .putBoolean("terms_done", true)
                                 .apply()
 
                             loggedIn = true
