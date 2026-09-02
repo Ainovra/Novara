@@ -2089,6 +2089,28 @@ def extract_and_save_memory(user_id, question, answer, plan="free"):
     return None
 
 
+def call_novara_model(prompt_text, mode="fast", plan="free", timeout=60):
+    """Call the model permitted by the user's subscription."""
+
+    route = novara_route_for_plan(plan, mode)
+
+    if route == "llama":
+        return call_hf_chat(
+            prompt_text,
+            NOVARA_FAST_MODEL,
+            timeout=timeout,
+        )
+
+    if route == "gemma":
+        return call_hf_chat(
+            prompt_text,
+            NOVARA_THINKING_MODEL,
+            timeout=timeout,
+        )
+
+    # DeepSeek is only reachable for Pro/V3.2 Omega.
+    return call_deepseek(prompt_text, timeout=timeout)
+
 def ask_ai(question, recent_messages, pdf_context="", image_path=None, web_context="", memories=None, model="fast", plan="free"):
     recent = "\n".join(f"{'User' if m['role']=='user' else 'Novara'}: {m['text']}" for m in recent_messages[-10:])
     memory_context = "\n".join(f"- {m}" for m in (memories or []))
