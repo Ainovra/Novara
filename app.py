@@ -2089,6 +2089,48 @@ def extract_and_save_memory(user_id, question, answer, plan="free"):
     return None
 
 
+def novara_route_for_plan(plan, mode):
+    """
+    Server-side Novara routing.
+
+    FREE:
+        Fast / Thinking / Omega -> Llama
+
+    PLUS:
+        Fast -> Llama
+        Thinking / Omega -> Gemma
+
+    PRO / V3.2:
+        Fast -> Llama
+        Thinking -> Gemma
+        Omega -> DeepSeek
+
+    The Android client cannot override this mapping.
+    """
+    plan = (plan or "free").strip().lower()
+    mode = (mode or "fast").strip().lower()
+
+    if mode not in {"fast", "thinking", "omega"}:
+        mode = "fast"
+
+    if plan == "free":
+        return "llama"
+
+    if plan == "plus":
+        if mode == "fast":
+            return "llama"
+        return "gemma"
+
+    if plan in {"pro", "v3.2", "v32"}:
+        if mode == "fast":
+            return "llama"
+        if mode == "thinking":
+            return "gemma"
+        return "deepseek"
+
+    # Unknown plan = safest default.
+    return "llama"
+
 def call_novara_model(prompt_text, mode="fast", plan="free", timeout=60):
     """Call the model permitted by the user's subscription."""
 
