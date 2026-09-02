@@ -2259,7 +2259,7 @@ USER MESSAGE:
                     vision_error
                 )
 
-                return "AI vision error: DeepSeek Vision did not return a response."
+                return f"AI vision error: {vision_error or 'DeepSeek returned empty response.'}"
 
             except Exception as e:
                 app.logger.exception("DEEPSEEK VISION REQUEST FAILED: %s", e)
