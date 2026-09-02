@@ -2070,6 +2070,25 @@ def call_deepseek(parts, timeout=60):
         return None, str(e)
 
 
+def get_user_memories(user_id):
+    """Return saved memories for a user."""
+    try:
+        db = get_db()
+        rows = db.execute(
+            "SELECT content FROM memories WHERE user_id = ? ORDER BY created_at DESC",
+            (user_id,)
+        ).fetchall()
+        return [row["content"] for row in rows if row["content"]]
+    except Exception:
+        app.logger.exception("GET USER MEMORIES ERROR")
+        return []
+
+
+def extract_and_save_memory(user_id, question, answer, plan="free"):
+    """Memory extraction hook. Safe no-op until explicit memory-worthy data is detected."""
+    return None
+
+
 def ask_ai(question, recent_messages, pdf_context="", image_path=None, web_context="", memories=None, model="fast", plan="free"):
     recent = "\n".join(f"{'User' if m['role']=='user' else 'Novara'}: {m['text']}" for m in recent_messages[-10:])
     memory_context = "\n".join(f"- {m}" for m in (memories or []))
