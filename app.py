@@ -2843,16 +2843,20 @@ def api_chat():
 
         )
 
-    answer = ask_ai(
-        effective_question,
-        recent_messages,
-        pdf_context,
-        image_path_for_ai,
-        web_context,
-        user_memories,
-        model=requested_model,
-        plan=user_plan,
-    )
+    try:
+        answer = ask_ai(
+            effective_question,
+            recent_messages,
+            pdf_context,
+            image_path_for_ai,
+            web_context,
+            user_memories,
+            model=requested_model,
+            plan=user_plan,
+        )
+    except Exception as e:
+        app.logger.exception("API CHAT AI ERROR")
+        return jsonify({"error": f"AI backend error: {type(e).__name__}: {e}"}), 500
 
     if question:
         extract_and_save_memory(session["user_id"], question, answer, plan=user_plan)
