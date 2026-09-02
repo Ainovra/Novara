@@ -2589,6 +2589,18 @@ ASSISTANT:
         return fallback
 
 
+@app.errorhandler(500)
+def novara_internal_error(error):
+    import sys
+    exc = sys.exc_info()[1]
+    app.logger.exception("NOVARA UNHANDLED 500")
+    return jsonify({
+        "error": "Internal server error",
+        "exception": type(exc).__name__ if exc else type(error).__name__,
+        "detail": str(exc) if exc else str(error),
+    }), 500
+
+
 @app.route("/api/chat", methods=["POST"])
 @login_required
 @terms_required
