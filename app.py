@@ -2227,79 +2227,43 @@ USER MESSAGE:
 {question}
 """
 
-    # Dedicated Qwen2-VL vision server on the S23 FE.
+    # DeepSeek Vision image analysis
     if image_path and os.path.exists(image_path):
         mime_type, _ = mimetypes.guess_type(image_path)
-
         if mime_type and mime_type.startswith("image/"):
             try:
                 import base64
 
-                vision_url = os.getenv(
-                    "VISION_SERVER_URL",
-                    "https://applicants-simple-cup-newest.trycloudflare.com"
-                ).rstrip("/")
-
                 with open(image_path, "rb") as f:
                     image_b64 = base64.b64encode(f.read()).decode("utf-8")
 
-                payload = {
-                    "model": "ggml-org/Qwen2-VL-2B-Instruct-GGUF:Q4_K_M",
-                    "messages": [{
-                        "role": "user",
-                        "content": [
-                            {
-                                "type": "text",
-                                "text": question or "Analyze this image carefully and describe what you see."
-                            },
-                            {
-                                "type": "image_url",
-                                "image_url": {
-                                    "url": f"data:{mime_type};base64,{image_b64}"
-                                }
-                            }
-                        ]
-                    }],
-                    "temperature": 0.2,
-                    "max_tokens": 1024,
-                    "stream": False
-                }
+                parts = [
+                    {
+                        "text": question or "Analyze this image carefully and describe what you see."
+                    },
+                    {
+                        "inline_data": {
+                            "mime_type": mime_type,
+                            "data": image_b64
+                        }
+                    }
+                ]
 
-                response = requests.post(
-                    vision_url + "/v1/chat/completions",
-                    headers={"Content-Type": "application/json"},
-                    json=payload,
-                    timeout=120
-                )
+                vision_text, vision_error = call_deepseek(parts, timeout=120)
 
-                data = response.json()
-
-                if response.ok and data.get("choices"):
-                    content = data["choices"][0]["message"].get("content", "")
-
-                    if isinstance(content, list):
-                        content = "".join(
-                            x.get("text", "") if isinstance(x, dict) else str(x)
-                            for x in content
-                        )
-
-                    if content:
-                        return content
+                if vision_text:
+                    return vision_text
 
                 app.logger.error(
-                    "QWEN2-VL ERROR HTTP %s: %s",
-                    response.status_code,
-                    data
+                    "DEEPSEEK VISION ERROR: %s",
+                    vision_error
                 )
 
-            except Exception as e:
-                app.logger.exception("QWEN2-VL REQUEST FAILED: %s", e)
+                return "AI vision error: DeepSeek Vision did not return a response."
 
-    # NOVARA_QWEN_ONLY_IMAGE_GUARD
-    # Image analysis must never fall back to Hugging Face.
-    if image_path and os.path.exists(image_path):
-        app.logger.error("QWEN2-VL failed; refusing HF image fallback.")
-        return "AI vision error: Qwen2-VL vision server did not return a response."
+            except Exception as e:
+                app.logger.exception("DEEPSEEK VISION REQUEST FAILED: %s", e)
+                return "AI vision error: DeepSeek Vision request failed."
 
     text, error = call_novara_model(
         prompt,
