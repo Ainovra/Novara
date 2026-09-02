@@ -1,0 +1,12 @@
+{
+  "versionCode": 9,
+  "versionName": "1.7.0",
+  "isMajor": false,
+  "apkUrl": "/download/latest",
+  "changelog": [
+    "Novara 1.7.0",
+    "UI and stability improvements",
+    "Memory system improvements",
+    "SDXS image generation backend improvements"
+  ]
+}
