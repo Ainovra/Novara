@@ -827,7 +827,7 @@ suspend fun guestLogin():
                                 JSONObject(body)
                             } catch (e: org.json.JSONException) {
                                 return@withContext ApiResult.Failure(
-                                    "Connection issue — please try again."
+                                    "Novara returned an invalid server response."
                                 )
                             }
 
