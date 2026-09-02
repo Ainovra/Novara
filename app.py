@@ -2089,6 +2089,49 @@ def extract_and_save_memory(user_id, question, answer, plan="free"):
     return None
 
 
+def call_hf_chat(prompt_text, model_name, timeout=60):
+    """Call a text model through Hugging Face Inference Providers."""
+    if not HF_TOKEN:
+        return None, "HF_TOKEN not set on server."
+
+    try:
+        response = requests.post(
+            "https://router.huggingface.co/v1/chat/completions",
+            headers={
+                "Authorization": f"Bearer {HF_TOKEN}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "model": model_name,
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": prompt_text,
+                    }
+                ],
+                "stream": False,
+            },
+            timeout=timeout,
+        )
+
+        data = response.json()
+
+        if "choices" not in data:
+            err = data.get("error", {})
+            if isinstance(err, dict):
+                return None, err.get("message", str(data))
+            return None, str(err)
+
+        content = data["choices"][0]["message"].get("content")
+
+        if not content:
+            return None, "Hugging Face returned an empty response."
+
+        return content, None
+
+    except Exception as e:
+        return None, str(e)
+
 def novara_route_for_plan(plan, mode):
     """
     Server-side Novara routing.
