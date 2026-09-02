@@ -20,7 +20,6 @@ import android.speech.tts.Voice
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.Image
@@ -28,8 +27,8 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.layout.*
@@ -82,7 +81,6 @@ import com.google.android.gms.ads.AdView
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.zIndex
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
@@ -187,17 +185,17 @@ private fun MissionCard(
                     modifier = Modifier.size(28.dp)
                 ) {
                     Box(contentAlignment = Alignment.Center) {
-                        Text("#$number", color = Color(0xFFF5F5FA), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        Text("#$number", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                     }
                 }
                 Spacer(Modifier.width(10.dp))
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(title, color = Color(0xFFF5F5FA), fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                    Text(title, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold)
                     Text(description, color = Color(0xFF8B92A0), fontSize = 12.sp, lineHeight = 16.sp)
                 }
                 Column(horizontalAlignment = Alignment.End) {
                     Text("Reward", color = Color(0xFFE8A33D), fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                    Text("$emoji $rewardText", color = Color(0xFFF5F5FA), fontSize = 11.sp, textAlign = androidx.compose.ui.text.style.TextAlign.End)
+                    Text("$emoji $rewardText", color = Color.White, fontSize = 11.sp, textAlign = androidx.compose.ui.text.style.TextAlign.End)
                 }
             }
 
@@ -240,19 +238,28 @@ private fun MissionCard(
 
 @Composable
 private fun NovaraThinkingIndicator(showText: Boolean) {
-    val transition = rememberInfiniteTransition(label = "novara_n_drawing")
+    val transition = rememberInfiniteTransition(label = "novara_thinking")
 
-    val progress by transition.animateFloat(
+    val rotation by transition.animateFloat(
         initialValue = 0f,
-        targetValue = 1f,
+        targetValue = 360f,
         animationSpec = infiniteRepeatable(
             animation = tween(
-                durationMillis = 1800,
+                durationMillis = 2600,
                 easing = LinearEasing
-            ),
-            repeatMode = RepeatMode.Restart
+            )
         ),
-        label = "n_drawing_progress"
+        label = "rotation"
+    )
+
+    val alpha by transition.animateFloat(
+        initialValue = 0.55f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(900),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "pulse"
     )
 
     Row(
@@ -264,109 +271,14 @@ private fun NovaraThinkingIndicator(showText: Boolean) {
             ),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Canvas(
-            modifier = Modifier.size(34.dp)
-        ) {
-            val strokeWidth = 3.2.dp.toPx()
-            val cap = androidx.compose.ui.graphics.StrokeCap.Round
-
-            val leftX = size.width * 0.20f
-            val rightX = size.width * 0.80f
-            val topY = size.height * 0.16f
-            val bottomY = size.height * 0.84f
-
-            // The three strokes that form an N:
-            // 1. bottom-left -> top-left
-            // 2. top-left -> bottom-right
-            // 3. bottom-right -> top-right
-
-            fun segmentProgress(
-                value: Float,
-                start: Float,
-                end: Float
-            ): Float {
-                return ((value - start) / (end - start))
-                    .coerceIn(0f, 1f)
-            }
-
-            val first = segmentProgress(progress, 0f, 0.30f)
-            val second = segmentProgress(progress, 0.30f, 0.68f)
-            val third = segmentProgress(progress, 0.68f, 1f)
-
-            // Very subtle inactive N underneath.
-            drawLine(
-                color = Color(0xFF20CFFF).copy(alpha = 0.10f),
-                start = androidx.compose.ui.geometry.Offset(leftX, bottomY),
-                end = androidx.compose.ui.geometry.Offset(leftX, topY),
-                strokeWidth = strokeWidth,
-                cap = cap
-            )
-
-            drawLine(
-                color = Color(0xFF20CFFF).copy(alpha = 0.10f),
-                start = androidx.compose.ui.geometry.Offset(leftX, topY),
-                end = androidx.compose.ui.geometry.Offset(rightX, bottomY),
-                strokeWidth = strokeWidth,
-                cap = cap
-            )
-
-            drawLine(
-                color = Color(0xFF20CFFF).copy(alpha = 0.10f),
-                start = androidx.compose.ui.geometry.Offset(rightX, bottomY),
-                end = androidx.compose.ui.geometry.Offset(rightX, topY),
-                strokeWidth = strokeWidth,
-                cap = cap
-            )
-
-            // Draw the N progressively, as if someone is writing it.
-            if (first > 0f) {
-                drawLine(
-                    color = Color(0xFF20CFFF),
-                    start = androidx.compose.ui.geometry.Offset(
-                        leftX,
-                        bottomY
-                    ),
-                    end = androidx.compose.ui.geometry.Offset(
-                        leftX,
-                        bottomY - ((bottomY - topY) * first)
-                    ),
-                    strokeWidth = strokeWidth,
-                    cap = cap
-                )
-            }
-
-            if (second > 0f) {
-                drawLine(
-                    color = Color(0xFF20CFFF),
-                    start = androidx.compose.ui.geometry.Offset(
-                        leftX,
-                        topY
-                    ),
-                    end = androidx.compose.ui.geometry.Offset(
-                        leftX + ((rightX - leftX) * second),
-                        topY + ((bottomY - topY) * second)
-                    ),
-                    strokeWidth = strokeWidth,
-                    cap = cap
-                )
-            }
-
-            if (third > 0f) {
-                drawLine(
-                    color = Color(0xFF20CFFF),
-                    start = androidx.compose.ui.geometry.Offset(
-                        rightX,
-                        bottomY
-                    ),
-                    end = androidx.compose.ui.geometry.Offset(
-                        rightX,
-                        bottomY - ((bottomY - topY) * third)
-                    ),
-                    strokeWidth = strokeWidth,
-                    cap = cap
-                )
-            }
-        }
+        Image(
+            painter = painterResource(R.drawable.novara_logo),
+            contentDescription = "Novara",
+            modifier = Modifier
+                .size(34.dp)
+                .rotate(rotation)
+                .alpha(alpha)
+        )
 
         if (showText) {
             Spacer(Modifier.width(10.dp))
@@ -541,14 +453,14 @@ fun ChatScreen() {
                     ) {
                         Text(
                             "Watch & Earn Missions",
-                            color = Color(0xFFF5F5FA),
+                            color = Color.White,
                             fontSize = 20.sp,
                             fontWeight = FontWeight.Bold
                         )
                         IconButton(
                             onClick = { if (!rewardBusy) showRewardPage = false }
                         ) {
-                            Icon(Icons.Default.Close, contentDescription = "Close", tint = Color(0xFFF5F5FA))
+                            Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.White)
                         }
                     }
 
@@ -570,9 +482,9 @@ fun ChatScreen() {
                         number = 1,
                         badgeColor = Color(0xFF7C5CFF),
                         emoji = "🖼️",
-                        title = "Image Generation",
-                        description = "Watch 1 ad and get 1 free image generation.",
-                        rewardText = "1 Image Generation",
+                        title = "Photo Generation",
+                        description = "Watch 1 ad and get 1 free photo generation.",
+                        rewardText = "1 Photo Generation",
                         adsRequired = 1,
                         adsWatched = 0,
                         completed = false,
@@ -626,7 +538,7 @@ fun ChatScreen() {
                             Icon(Icons.Default.Refresh, contentDescription = null, tint = Color(0xFF8B92A0), modifier = Modifier.size(18.dp))
                             Spacer(Modifier.width(10.dp))
                             Column {
-                                Text("Unlimited rewarded ads", color = Color(0xFFF5F5FA), fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                                Text("Unlimited rewarded ads", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Medium)
                                 Text("Watch an ad to earn a reward. No daily or 6-hour limit.", color = Color(0xFF8B92A0), fontSize = 12.sp)
                             }
                         }
@@ -1837,7 +1749,7 @@ ModalNavigationDrawer(
                                     }
                                 )
                                 DropdownMenuItem(
-                                    text = { Text("Photos & Videos") },
+                                    text = { Text("Photo & Video") },
                                     onClick = {
                                         attachMenuExpanded = false
                                         galleryPicker.launch(
@@ -1896,7 +1808,7 @@ ModalNavigationDrawer(
                             if (input.isEmpty()) {
                                 Text(
                                     text = if (imageGen)
-                                        "Describe the image you want..."
+                                        "Describe the image..."
                                     else
                                         "Message Novara...",
                                     style = MaterialTheme.typography.bodyMedium,
@@ -2022,12 +1934,6 @@ ModalNavigationDrawer(
                                 Alignment.CenterHorizontally
                         ) {
 
-                            NovaraWelcomeLogo()
-
-                            Spacer(
-                                Modifier.height(20.dp)
-                            )
-
                             Text(
                                 "How can I help?",
                                 style =
@@ -2041,7 +1947,7 @@ ModalNavigationDrawer(
                             )
 
                             Text(
-                                "Chat, search, analyze files, or create images."
+                                "Chat, search, analyze files or generate images."
                             )
                         }
                     }
@@ -2537,7 +2443,7 @@ private fun VoiceModeOverlay(
                 .align(Alignment.TopStart)
                 .size(46.dp)
         ) {
-            Icon(Icons.Default.Close, contentDescription = "Close", tint = Color(0xFFF5F5FA))
+            Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.White)
         }
 
         Text(
@@ -2545,7 +2451,7 @@ private fun VoiceModeOverlay(
             modifier = Modifier
                 .align(Alignment.TopCenter)
                 .padding(top = 12.dp),
-            color = Color(0xFFF5F5FA).copy(alpha = 0.55f),
+            color = Color.White.copy(alpha = 0.55f),
             fontSize = 12.sp,
             fontWeight = FontWeight.SemiBold,
             letterSpacing = 2.sp
@@ -2560,7 +2466,7 @@ private fun VoiceModeOverlay(
             Icon(
                 if (isMuted) Icons.Default.MicOff else Icons.Default.Mic,
                 contentDescription = if (isMuted) "Unmute microphone" else "Mute microphone",
-                tint = if (isMuted) Color(0xFFFF8A8A) else Color(0xFFF5F5FA)
+                tint = if (isMuted) Color(0xFFFF8A8A) else Color.White
             )
         }
 
@@ -2586,7 +2492,7 @@ private fun VoiceModeOverlay(
                     isListening -> "Listening"
                     else -> "Thinking"
                 },
-                color = Color(0xFFF5F5FA),
+                color = Color.White,
                 fontSize = 21.sp,
                 fontWeight = FontWeight.Medium
             )
@@ -2606,21 +2512,21 @@ private fun VoiceModeOverlay(
                 Surface(
                     onClick = { voiceMenuOpen = !voiceMenuOpen },
                     shape = RoundedCornerShape(18.dp),
-                    color = Color(0xFFF5F5FA).copy(alpha = 0.08f),
+                    color = Color.White.copy(alpha = 0.08f),
                     border = androidx.compose.foundation.BorderStroke(
                         1.dp,
-                        Color(0xFFF5F5FA).copy(alpha = 0.10f)
+                        Color.White.copy(alpha = 0.10f)
                     )
                 ) {
                     Row(
                         modifier = Modifier.padding(horizontal = 17.dp, vertical = 11.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text("Voice", color = Color(0xFFF5F5FA).copy(alpha = 0.65f), fontSize = 13.sp)
+                        Text("Voice", color = Color.White.copy(alpha = 0.65f), fontSize = 13.sp)
                         Spacer(Modifier.width(10.dp))
-                        Text(selectedVoice.name, color = Color(0xFFF5F5FA), fontSize = 14.sp)
+                        Text(selectedVoice.name, color = Color.White, fontSize = 14.sp)
                         Spacer(Modifier.width(8.dp))
-                        Text("⌄", color = Color(0xFFF5F5FA).copy(alpha = 0.6f))
+                        Text("⌄", color = Color.White.copy(alpha = 0.6f))
                     }
                 }
 
@@ -2655,7 +2561,7 @@ private fun VoiceModeOverlay(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .padding(bottom = 10.dp),
-            color = Color(0xFFF5F5FA).copy(alpha = 0.42f),
+            color = Color.White.copy(alpha = 0.42f),
             fontSize = 12.sp
         )
     }
@@ -2742,7 +2648,7 @@ private fun SophisticatedVoiceVisual(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .padding(bottom = 7.dp),
-                color = Color(0xFFF5F5FA).copy(alpha = 0.8f),
+                color = Color.White.copy(alpha = 0.8f),
                 fontSize = 20.sp,
                 letterSpacing = 4.sp
             )
@@ -2751,67 +2657,51 @@ private fun SophisticatedVoiceVisual(
 }
 
 @Composable
-private fun NovaraWelcomeLogo() {
-    var visible by remember { mutableStateOf(false) }
-
-    LaunchedEffect(Unit) {
-        visible = true
-    }
-
-    val scale by animateFloatAsState(
-        targetValue = if (visible) 1f else 0.82f,
-        animationSpec = tween(
-            durationMillis = 450,
-            easing = FastOutSlowInEasing
-        ),
-        label = "novara_welcome_scale"
-    )
-
-    val alpha by animateFloatAsState(
-        targetValue = if (visible) 1f else 0f,
-        animationSpec = tween(
-            durationMillis = 350,
-            easing = FastOutSlowInEasing
-        ),
-        label = "novara_welcome_alpha"
-    )
-
-    Image(
-        painter = painterResource(R.drawable.novara_logo),
-        contentDescription = "Novara AI",
-        modifier = Modifier
-            .size(68.dp)
-            .scale(scale)
-            .alpha(alpha)
-    )
-}
-
-@Composable
 private fun NovaraAnimatedLogo(
     modifier: Modifier = Modifier
 ) {
-    val transition = rememberInfiniteTransition(label = "novara_logo_transition")
+    val transition = rememberInfiniteTransition(label = "novara_rings")
 
-    val scale by transition.animateFloat(
-        initialValue = 0.94f,
-        targetValue = 1.06f,
+    val orbit by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
         animationSpec = infiniteRepeatable(
             animation = tween(
-                durationMillis = 900,
-                easing = FastOutSlowInEasing
+                durationMillis = 3200,
+                easing = LinearEasing
             ),
-            repeatMode = RepeatMode.Reverse
+            repeatMode = RepeatMode.Restart
         ),
-        label = "novara_logo_scale"
+        label = "rings_orbit"
     )
 
-    Image(
-        painter = painterResource(R.drawable.novara_logo),
-        contentDescription = "Novara AI",
-        modifier = modifier
-            .size(42.dp)
-            .scale(scale)
-    )
+    Box(
+        modifier = modifier.size(42.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        // Rings orbit left-to-right around the star, like a planet orbiting a sun viewed edge-on
+        Image(
+            painter = painterResource(
+                com.novara.app.R.drawable.novara_rings_only
+            ),
+            contentDescription = null,
+            modifier = Modifier
+                .matchParentSize()
+                .graphicsLayer {
+                    rotationY = orbit
+                    cameraDistance = 24f
+                    transformOrigin = androidx.compose.ui.graphics.TransformOrigin.Center
+                }
+        )
+
+        Image(
+            painter = painterResource(
+                com.novara.app.R.drawable.novara_star_only
+            ),
+            contentDescription = "Novara",
+            modifier = Modifier.matchParentSize()
+        )
+    }
 }
 
 @Composable
@@ -2825,7 +2715,9 @@ private fun NovaraResponseIndicator(
             .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        NovaraAnimatedLogo()
+        NovaraAnimatedLogo(
+            modifier = Modifier.size(42.dp)
+        )
 
         Spacer(Modifier.width(10.dp))
 

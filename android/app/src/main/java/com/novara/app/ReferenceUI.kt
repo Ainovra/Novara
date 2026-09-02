@@ -1,0 +1,329 @@
+
+package com.novara.app
+
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.delay
+
+private val NDark=Color(0xFF050711)
+private val NSurface=Color(0xFF0B1220)
+private val NSurface2=Color(0xFF10192B)
+private val NBlue=Color(0xFF21C8FF)
+private val NPurple=Color(0xFF8B5CFF)
+private val NText=Color(0xFFF4F7FF)
+private val NMuted=Color(0xFF91A0B8)
+
+@Composable
+fun ReferenceApp() {
+    var page by remember { mutableStateOf("loading") }
+    var progress by remember { mutableFloatStateOf(0f) }
+    var majorUpdate by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+
+    LaunchedEffect(Unit) {
+        delay(1100)
+        page="initializing"
+        for(i in 1..30) {
+            progress=i/30f
+            delay(35)
+        }
+        delay(450)
+        page="welcome"
+    }
+
+    Surface(
+        modifier=Modifier.fillMaxSize(),
+        color=NDark
+    ) {
+        when(page) {
+            "loading" -> ReferenceSplash("Loading...", null)
+            "initializing" -> ReferenceSplash("Initializing...", progress)
+            "welcome" -> ReferenceWelcome { page="chat" }
+            else -> ReferenceChat { majorUpdate=true }
+        }
+
+        if (majorUpdate) {
+            ReferenceUpdateSheet(
+                onUpdate={
+                    majorUpdate=false
+                    try {
+                        context.startActivity(Intent(Intent.ACTION_VIEW,Uri.parse("https://yourdomain.com/download")))
+                    } catch(_:Exception){}
+                },
+                onLater={majorUpdate=false}
+            )
+        }
+    }
+}
+
+@Composable
+private fun ReferenceSplash(label:String, progress:Float?) {
+    Box(
+        Modifier.fillMaxSize().background(
+            Brush.radialGradient(
+                listOf(Color(0xFF102A58),Color(0xFF070B18),NDark)
+            )
+        ),
+        contentAlignment=Alignment.Center
+    ) {
+        Column(
+            horizontalAlignment=Alignment.CenterHorizontally,
+            modifier=Modifier.fillMaxWidth().padding(horizontal=35.dp)
+        ) {
+            NeonLogo(90.dp)
+            Spacer(Modifier.height(20.dp))
+            Row(verticalAlignment=Alignment.CenterVertically) {
+                Text("Novara",fontSize=32.sp,fontWeight=FontWeight.Bold,color=NText)
+                Text(" AI",fontSize=32.sp,fontWeight=FontWeight.Bold,
+                    style = LocalTextStyle.current.copy(brush = Brush.horizontalGradient(listOf(NPurple,NBlue))))
+            }
+            Spacer(Modifier.height(6.dp))
+            Text("Think • Create • Explore",fontSize=13.sp,color=NMuted)
+            Spacer(Modifier.height(48.dp))
+            if(progress==null) {
+                PulsingRing()
+            } else {
+                LinearProgressIndicator(
+                    progress={progress},
+                    modifier=Modifier.width(128.dp).height(5.dp).clip(RoundedCornerShape(10.dp)),
+                    color=NBlue,
+                    trackColor=Color(0xFF18305A)
+                )
+            }
+            Spacer(Modifier.height(10.dp))
+            Text(label,fontSize=11.sp,color=NMuted)
+        }
+    }
+}
+
+@Composable
+private fun ReferenceWelcome(onStart:()->Unit) {
+    Box(
+        Modifier.fillMaxSize().background(
+            Brush.radialGradient(listOf(Color(0xFF112A52),NDark))
+        )
+    ) {
+        Column(
+            Modifier.fillMaxSize().padding(28.dp),
+            horizontalAlignment=Alignment.CenterHorizontally
+        ) {
+            Spacer(Modifier.weight(1f))
+            NeonLogo(85.dp)
+            Spacer(Modifier.height(26.dp))
+            Text("Welcome to",fontSize=19.sp,color=NText)
+            Spacer(Modifier.height(4.dp))
+            Row {
+                Text("Novara",fontSize=31.sp,fontWeight=FontWeight.Bold,color=NText)
+                Text(" AI",fontSize=31.sp,fontWeight=FontWeight.Bold,
+                    style = LocalTextStyle.current.copy(brush = Brush.horizontalGradient(listOf(NPurple,NBlue))))
+            }
+            Spacer(Modifier.height(10.dp))
+            Text("Your Intelligent Assistant",fontSize=14.sp,color=NMuted)
+            Spacer(Modifier.weight(1f))
+            Button(
+                onClick=onStart,
+                modifier=Modifier.fillMaxWidth().height(56.dp),
+                shape=RoundedCornerShape(30.dp),
+                colors=ButtonDefaults.buttonColors(containerColor=Color.Transparent),
+                contentPadding=PaddingValues()
+            ) {
+                Box(
+                    Modifier.fillMaxSize().background(
+                        Brush.horizontalGradient(listOf(NBlue,NPurple)),
+                        RoundedCornerShape(30.dp)
+                    ),
+                    contentAlignment=Alignment.Center
+                ) {
+                    Text("Get Started  →",fontSize=16.sp,fontWeight=FontWeight.SemiBold,color=Color.White)
+                }
+            }
+            Spacer(Modifier.height(28.dp))
+        }
+    }
+}
+
+@Composable
+private fun ReferenceChat(onMajorUpdate:()->Unit) {
+    var text by remember { mutableStateOf("") }
+
+    Column(
+        Modifier.fillMaxSize().background(NDark)
+    ) {
+        Row(
+            Modifier.fillMaxWidth().height(62.dp).padding(horizontal=16.dp),
+            verticalAlignment=Alignment.CenterVertically
+        ) {
+            Text("☰",fontSize=25.sp,color=NText)
+            Spacer(Modifier.width(15.dp))
+            NeonLogo(32.dp)
+            Spacer(Modifier.width(9.dp))
+            Text("Novara",fontSize=18.sp,fontWeight=FontWeight.Bold,color=NText)
+            Text(" AI",fontSize=18.sp,fontWeight=FontWeight.Bold,
+                style = LocalTextStyle.current.copy(brush = Brush.horizontalGradient(listOf(NPurple,NBlue))))
+            Spacer(Modifier.weight(1f))
+            Text("◉",fontSize=21.sp,color=NMuted)
+        }
+
+        Box(
+            Modifier.weight(1f).fillMaxWidth(),
+            contentAlignment=Alignment.Center
+        ) {
+            Column(
+                horizontalAlignment=Alignment.CenterHorizontally,
+                modifier=Modifier.padding(30.dp)
+            ) {
+                NeonLogo(46.dp)
+                Spacer(Modifier.height(18.dp))
+                Text("Hi! I'm Novara AI",fontSize=20.sp,color=NText,fontWeight=FontWeight.Medium)
+                Spacer(Modifier.height(7.dp))
+                Text(
+                    "Ask me anything, generate images,\nvideos and more.",
+                    fontSize=13.sp,color=NMuted,textAlign=TextAlign.Center,lineHeight=20.sp
+                )
+            }
+        }
+
+        Row(
+            Modifier.fillMaxWidth().padding(start=12.dp,end=12.dp,bottom=12.dp),
+            verticalAlignment=Alignment.Bottom
+        ) {
+            Row(
+                Modifier.weight(1f)
+                    .border(1.dp,Color(0xFF293750),RoundedCornerShape(28.dp))
+                    .background(NSurface,RoundedCornerShape(28.dp))
+                    .padding(horizontal=15.dp,vertical=5.dp),
+                verticalAlignment=Alignment.CenterVertically
+            ) {
+                Text("⊕",fontSize=20.sp,color=NMuted)
+                Spacer(Modifier.width(8.dp))
+                androidx.compose.foundation.text.BasicTextField(
+                    value=text,
+                    onValueChange={text=it},
+                    modifier=Modifier.weight(1f).padding(vertical=11.dp),
+                    textStyle=androidx.compose.ui.text.TextStyle(color=NText,fontSize=13.sp),
+                    decorationBox={inner->
+                        if(text.isEmpty()) Text("Message Novara...",color=NMuted,fontSize=13.sp)
+                        inner()
+                    }
+                )
+                Text("♩",fontSize=18.sp,color=NMuted)
+            }
+            Spacer(Modifier.width(8.dp))
+            Box(
+                Modifier.size(49.dp).clip(CircleShape)
+                    .background(Brush.linearGradient(listOf(NBlue,NPurple)))
+                    .clickable{ },
+                contentAlignment=Alignment.Center
+            ) { Text("⌁",fontSize=23.sp,color=Color.White) }
+        }
+    }
+}
+
+@Composable
+private fun ReferenceUpdateSheet(onUpdate:()->Unit,onLater:()->Unit) {
+    Box(
+        Modifier.fillMaxSize().background(Color.Black.copy(alpha=.55f)),
+        contentAlignment=Alignment.BottomCenter
+    ) {
+        Column(
+            Modifier.fillMaxWidth()
+                .clip(RoundedCornerShape(topStart=28.dp,topEnd=28.dp))
+                .background(Color(0xFFF7F9FE))
+                .padding(22.dp),
+            horizontalAlignment=Alignment.CenterHorizontally
+        ) {
+            Box(Modifier.width(42.dp).height(4.dp).clip(RoundedCornerShape(4.dp))
+                .background(Color(0xFFD4D8E0)))
+            Spacer(Modifier.height(18.dp))
+            NeonLogo(58.dp)
+            Spacer(Modifier.height(12.dp))
+            Text("Update Available",fontSize=21.sp,fontWeight=FontWeight.Bold,color=Color(0xFF101522))
+            Spacer(Modifier.height(8.dp))
+            Surface(shape=RoundedCornerShape(20.dp),color=Color(0xFF1769E8)) {
+                Text("New Version 1.7",Modifier.padding(horizontal=14.dp,vertical=6.dp),
+                    color=Color.White,fontSize=12.sp,fontWeight=FontWeight.SemiBold)
+            }
+            Spacer(Modifier.height(18.dp))
+            Text("✨  New features",color=Color(0xFF303746),fontSize=14.sp)
+            Text("🐞  Bug fixes",color=Color(0xFF303746),fontSize=14.sp)
+            Text("⚡  Improvements",color=Color(0xFF303746),fontSize=14.sp)
+            Spacer(Modifier.height(18.dp))
+            Button(
+                onClick=onUpdate,
+                modifier=Modifier.fillMaxWidth().height(50.dp),
+                shape=RoundedCornerShape(25.dp),
+                colors=ButtonDefaults.buttonColors(containerColor=Color(0xFF1769E8))
+            ) { Text("Update Now  ↗",fontWeight=FontWeight.SemiBold) }
+            Spacer(Modifier.height(8.dp))
+            OutlinedButton(
+                onClick=onLater,
+                modifier=Modifier.fillMaxWidth().height(48.dp),
+                shape=RoundedCornerShape(24.dp),
+                colors=ButtonDefaults.outlinedButtonColors(contentColor=Color(0xFF17345F))
+            ) { Text("Later") }
+        }
+    }
+}
+
+@Composable
+private fun NeonLogo(size:androidx.compose.ui.unit.Dp) {
+    Box(
+        Modifier.size(size).clip(RoundedCornerShape(size/4)),
+        contentAlignment=Alignment.Center
+    ) {
+        Box(
+            Modifier.fillMaxSize().background(
+                Brush.linearGradient(listOf(Color(0xFF102A55),Color(0xFF07111E)))
+            )
+        )
+        Text(
+            "N",
+            fontSize=(size.value*.58f).sp,
+            fontWeight=FontWeight.Bold,
+            style = LocalTextStyle.current.copy(brush = Brush.linearGradient(listOf(NPurple,NBlue,Color(0xFF39E8FF))))
+        )
+    }
+}
+
+@Composable
+private fun PulsingRing() {
+    val t=rememberInfiniteTransition(label="ring")
+    val s by t.animateFloat(
+        0.82f,1.12f,
+        infiniteRepeatable(tween(850, easing=FastOutSlowInEasing),RepeatMode.Reverse),
+        label="scale"
+    )
+    Box(
+        Modifier.size(42.dp).scale(s).border(3.dp,NBlue,CircleShape),
+        contentAlignment=Alignment.Center
+    ) {}
+}

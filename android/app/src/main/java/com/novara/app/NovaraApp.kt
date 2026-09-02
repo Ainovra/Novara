@@ -3,12 +3,20 @@ package com.novara.app
 import android.app.Application
 import android.webkit.CookieManager
 import android.webkit.WebView
+import com.novara.app.ads.RewardedAdManager
 import java.io.File
 import java.io.PrintWriter
 import java.io.StringWriter
 
 class NovaraApp : Application() {
+
+    companion object {
+        lateinit var instance: NovaraApp
+            private set
+    }
+
     override fun onCreate() {
+        instance = this
         super.onCreate()
 
         Thread.setDefaultUncaughtExceptionHandler { _, throwable ->
@@ -23,6 +31,8 @@ class NovaraApp : Application() {
             android.os.Process.killProcess(android.os.Process.myPid())
             System.exit(10)
         }
+
+        RewardedAdManager.get(this).initialize()
 
         CookieManager.getInstance().setAcceptCookie(true)
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {

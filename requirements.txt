@@ -6,3 +6,10 @@ authlib
 psycopg2-binary
 huggingface_hub
 Pillow
+google-auth
+
+python-docx
+
+openpyxl
+
+python-pptx

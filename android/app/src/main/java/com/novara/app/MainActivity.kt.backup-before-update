@@ -1,11 +1,6 @@
 package com.novara.app
 
 import android.content.Intent
-import android.content.Context
-import android.content.BroadcastReceiver
-import android.content.IntentFilter
-
-import android.app.DownloadManager
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -21,7 +16,6 @@ import android.net.Uri
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -34,9 +28,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.*
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.material3.rememberModalBottomSheetState
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -44,7 +35,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.KeyboardType
@@ -63,7 +53,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-private val NovaraBg = NovaraBrand.Background
+private val NovaraBg = Color(0xFF071018)
 private val NovaraCard = Color(0xFF101D27)
 private val NovaraCard2 = Color(0xFF142432)
 private val NovaraBorder = Color(0xFF263B49)
@@ -73,111 +63,36 @@ private val NovaraYellow = Color(0xFFFFC400)
 private val NovaraBlue = Color(0xFF28B7FF)
 private val NovaraPurple = Color(0xFF7548FF)
 
-
-
 class MainActivity : ComponentActivity() {
-    private val novaraDownloadReceiver =
-        object : BroadcastReceiver() {
-            override fun onReceive(
-                context: android.content.Context?,
-                intent: Intent?
-            ) {
-                if (
-                    intent?.action !=
-                    DownloadManager.ACTION_DOWNLOAD_COMPLETE
-                ) return
-
-                val id =
-                    intent.getLongExtra(
-                        DownloadManager.EXTRA_DOWNLOAD_ID,
-                        -1L
-                    )
-
-                
-    val prefs =
-                    getSharedPreferences(
-                        "novara_updates",
-                        MODE_PRIVATE
-                    )
-
-                val expected =
-                    prefs.getLong(
-                        "download_id",
-                        -2L
-                    )
-
-                if (id != expected) return
-
-                val manager =
-                    getSystemService(
-                        DOWNLOAD_SERVICE
-                    ) as DownloadManager
-
-                val uri =
-                    manager.getUriForDownloadedFile(id)
-
-                val version =
-                    prefs.getString(
-                        "download_version",
-                        ""
-                    ) ?: ""
-
-                if (uri != null) {
-                    NovaraUpdateManager.showUpdatedNotification(
-                        this@MainActivity,
-                        version
-                    )
-
-                    NovaraUpdateManager.installDownloadedApk(
-                        this@MainActivity,
-                        uri
-                    )
-                }
-            }
-        }
-
 
     private var authError by mutableStateOf<String?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        NovaraUpdateManager.createChannel(this)
+        handleIntent(intent)
 
-        if (android.os.Build.VERSION.SDK_INT >= 33) {
-            if (
-                androidx.core.content.ContextCompat.checkSelfPermission(
-                    this,
-                    "android.permission.POST_NOTIFICATIONS"
-                ) != android.content.pm.PackageManager.PERMISSION_GRANTED
-            ) {
-                androidx.core.app.ActivityCompat.requestPermissions(
-                    this,
-                    arrayOf("android.permission.POST_NOTIFICATIONS"),
-                    1702
-                )
+        lifecycleScope.launch {
+            val update = UpdateManager.check()
+            if (update != null) {
+                runOnUiThread {
+                    android.app.AlertDialog.Builder(this@MainActivity)
+                        .setTitle("Novara update available")
+                        .setMessage(
+                            "Novara ${update.versionName} is available.\\n\\n" +
+                            "You are using version ${BuildConfig.VERSION_NAME}."
+                        )
+                        .setNegativeButton("Later", null)
+                        .setPositiveButton("Update") { _, _ ->
+                            UpdateManager.downloadAndInstall(
+                                this@MainActivity,
+                                update
+                            )
+                        }
+                        .show()
+                }
             }
         }
-
-        val filter =
-            IntentFilter(
-                DownloadManager.ACTION_DOWNLOAD_COMPLETE
-            )
-
-        if (android.os.Build.VERSION.SDK_INT >= 33) {
-            registerReceiver(
-                novaraDownloadReceiver,
-                filter,
-                Context.RECEIVER_NOT_EXPORTED
-            )
-        } else {
-            registerReceiver(
-                novaraDownloadReceiver,
-                filter
-            )
-        }
-
-        handleIntent(intent)
 
         setContent {
             NovaraTheme {
@@ -196,17 +111,6 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
-    }
-
-    override fun onDestroy() {
-        try {
-            unregisterReceiver(
-                novaraDownloadReceiver
-            )
-        } catch (_: Exception) {
-        }
-
-        super.onDestroy()
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -255,33 +159,22 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun NovaraNativeApp(
     onGoogleLogin: () -> Unit,
     onAuthCode: (String) -> Unit
 ) {
     val context = LocalContext.current
-
-    val prefs = context.getSharedPreferences(
-        "novara_prefs",
-        android.content.Context.MODE_PRIVATE
-    )
-
-    var novaraFirstLaunchSplash by remember {
-        mutableStateOf(
-            !prefs.getBoolean("first_launch_splash_done", false)
+    val prefs =
+        context.getSharedPreferences(
+            "novara_native",
+            android.content.Context.MODE_PRIVATE
         )
-    }
 
     var onboardingDone by remember {
         mutableStateOf(
             prefs.getBoolean("onboarding_done", false)
         )
-    }
-
-    var onboardingPage by remember {
-        mutableIntStateOf(0)
     }
 
     var termsDone by remember {
@@ -296,109 +189,14 @@ private fun NovaraNativeApp(
         )
     }
 
-    var showNovaraSplash by remember {
-        mutableStateOf(false)
-    }
-
     val guestScope = rememberCoroutineScope()
 
-    var remoteNovaraConfig by remember {
-        mutableStateOf<NovaraUpdateManager.RemoteConfig?>(null)
+    var onboardingPage by remember {
+        mutableIntStateOf(0)
     }
 
-    var novaraUpdateInfo by remember {
-        mutableStateOf<NovaraUpdateManager.UpdateInfo?>(null)
-    }
-
-    var showNovaraUpdateSheet by remember {
+    var showNovaraSplash by remember {
         mutableStateOf(false)
-    }
-
-    var minorUpdateStarted by remember {
-        mutableStateOf(false)
-    }
-
-    LaunchedEffect(Unit) {
-        val remote = NovaraUpdateManager.refresh(
-            Config.WEB_BASE_URL
-        )
-
-        if (remote != null) {
-            remoteNovaraConfig = remote
-
-            val update = remote.update
-
-            if (
-                update.versionCode > NovaraVersion.VERSION_CODE &&
-                update.apkUrl.isNotBlank() &&
-                !minorUpdateStarted
-            ) {
-                novaraUpdateInfo = update
-
-                if (update.isMajor) {
-                    showNovaraUpdateSheet = true
-                } else {
-                    minorUpdateStarted = true
-
-                    NovaraUpdateManager.downloadUpdate(
-                        context = context,
-                        baseUrl = Config.WEB_BASE_URL,
-                        apkUrl = update.apkUrl,
-                        versionName = update.versionName
-                    )
-                }
-            }
-        }
-    }
-
-    // =========================================================
-    // NOVARA UPDATE ENGINE — SINGLE STARTUP INSTANCE
-    // =========================================================
-    if (showNovaraUpdateSheet &&
-        novaraUpdateInfo != null) {
-
-        ModalBottomSheet(
-            onDismissRequest = {
-                showNovaraUpdateSheet = false
-            },
-            sheetState = rememberModalBottomSheetState(
-                skipPartiallyExpanded = true
-            )
-        ) {
-            NovaraUpdateSheet(
-                version =
-                    novaraUpdateInfo!!.versionName,
-                changelog =
-                    novaraUpdateInfo!!.changelog,
-                onUpdate = {
-                    NovaraUpdateManager.downloadUpdate(
-                        context = context,
-                        baseUrl = Config.WEB_BASE_URL,
-                        apkUrl = novaraUpdateInfo!!.apkUrl,
-                        versionName = novaraUpdateInfo!!.versionName
-                    )
-                },
-                onLater = {
-                    showNovaraUpdateSheet = false
-                }
-            )
-        }
-    }
-
-    if (novaraFirstLaunchSplash) {
-        NovaraLogoSplash(
-            onFinished = {
-                prefs.edit()
-                    .putBoolean(
-                        "first_launch_splash_done",
-                        true
-                    )
-                    .apply()
-
-                novaraFirstLaunchSplash = false
-            }
-        )
-        return
     }
 
     when {
@@ -463,7 +261,7 @@ private fun NovaraNativeApp(
 
                                 if (!guestReady) {
                                     android.util.Log.e(
-                                        "Welcome to Novara",
+                                        "Novara",
                                         "Guest session created but terms acceptance failed: ${termsResult.second}"
                                     )
                                 }
@@ -505,8 +303,88 @@ private fun NovaraNativeApp(
                     }
                 )
             } else {
-                            ChatScreen()
+                var updateInfo by remember { mutableStateOf<Triple<Int, String, String>?>(null) }
+                val updateScope = rememberCoroutineScope()
 
+                fun downloadAndInstall(ctx: android.content.Context, apkUrl: String) {
+                    updateScope.launch {
+                        try {
+                            val client = com.novara.app.network.ApiClient.client
+                            val request = okhttp3.Request.Builder().url(apkUrl).build()
+                            val response = client.newCall(request).execute()
+                            val apkFile = java.io.File(ctx.cacheDir, "novara_update.apk")
+                            response.body?.byteStream()?.use { input ->
+                                apkFile.outputStream().use { output ->
+                                    input.copyTo(output)
+                                }
+                            }
+
+                            val apkUri = androidx.core.content.FileProvider.getUriForFile(
+                                ctx,
+                                "${'$'}{ctx.packageName}.fileprovider",
+                                apkFile
+                            )
+
+                            val installIntent = Intent(Intent.ACTION_VIEW).apply {
+                                setDataAndType(apkUri, "application/vnd.android.package-archive")
+                                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION
+                            }
+                            ctx.startActivity(installIntent)
+                        } catch (e: Exception) {
+                            android.widget.Toast.makeText(
+                                ctx,
+                                "Couldn't download the update. Please try again later.",
+                                android.widget.Toast.LENGTH_LONG
+                            ).show()
+                        }
+                    }
+                }
+
+                LaunchedEffect(Unit) {
+                    val result = apiGet("/api/app-version")
+                    if (result.first) {
+                        try {
+                            val json = JSONObject(result.second)
+                            val serverCode = json.optInt("versionCode", -1)
+                            val serverName = json.optString("versionName", "")
+                            val apkUrl = json.optString("apkUrl", "")
+                            val isMajor = json.optBoolean("isMajor", false)
+
+                            if (serverCode > BuildConfig.VERSION_CODE && apkUrl.isNotEmpty()) {
+                                if (isMajor) {
+                                    updateInfo = Triple(serverCode, serverName, apkUrl)
+                                } else {
+                                    downloadAndInstall(context, apkUrl)
+                                }
+                            }
+                        } catch (_: Exception) {
+                        }
+                    }
+                }
+
+                ChatScreen()
+
+                val info = updateInfo
+                if (info != null) {
+                    androidx.compose.material3.AlertDialog(
+                        onDismissRequest = { updateInfo = null },
+                        title = { Text("Update available") },
+                        text = { Text("Novara ${'$'}{info.second} is available. Update now for the latest fixes and features.") },
+                        confirmButton = {
+                            androidx.compose.material3.TextButton(onClick = {
+                                downloadAndInstall(context, info.third)
+                                updateInfo = null
+                            }) {
+                                Text("Update")
+                            }
+                        },
+                        dismissButton = {
+                            androidx.compose.material3.TextButton(onClick = { updateInfo = null }) {
+                                Text("Later")
+                            }
+                        }
+                    )
+                }
             }
         }
     }
@@ -520,28 +398,28 @@ private fun OnboardingScreen(
 ) {
     val slides = listOf(
         Triple(
-            "✨",
-            "Welcome to Novara",
-            "Your AI assistant for chatting, learning, creating, and getting things done."
+            "✦",
+            "Novara",
+            "Your personal AI assistant — chat, learn, and get things done."
         ),
         Triple(
             "💬",
-            "Chat naturally",
-            "Ask questions, brainstorm ideas, learn something new, or simply have a conversation."
+            "Every conversation is saved",
+            "Separate conversations are kept in your history — pick up any of them, anytime."
         ),
         Triple(
-            "🎨",
-            "Create with Novara",
-            "Work with images, PDFs, and other content directly in your conversations."
+            "⌕",
+            "Photos, PDFs, and more",
+            "Send an image and Novara can “see” it. Attach a PDF and ask questions about it."
         ),
         Triple(
             "🎙",
-            "Use your voice",
-            "Speak naturally with Novara when you don't want to type."
+            "Speak instead of typing",
+            "Tap the mic and talk — your voice turns into text instantly."
         ),
         Triple(
-            "🚀",
-            "You're ready",
+            "⚡",
+            "Ready when you are",
             "Ask anything — text, photo, PDF, voice, or ask Novara to create an image."
         )
     )
@@ -554,7 +432,7 @@ private fun OnboardingScreen(
             .background(
                 Brush.verticalGradient(
                     listOf(
-                        NovaraBrand.Background,
+                        Color(0xFF071018),
                         Color(0xFF091823),
                         Color(0xFF050B10)
                     )
@@ -581,8 +459,8 @@ private fun OnboardingScreen(
 
             Box(
                 modifier = Modifier
-                    .size(58.dp)
-                    .clip(RoundedCornerShape(18.dp))
+                    .size(72.dp)
+                    .clip(RoundedCornerShape(22.dp))
                     .background(
                         Brush.linearGradient(
                             listOf(
@@ -600,8 +478,8 @@ private fun OnboardingScreen(
             ) {
                 Text(
                     text = slide.first,
-                    fontSize = 25.sp,
-                    color = Color(0xFFF5F5FA)
+                    fontSize = 34.sp,
+                    color = Color.White
                 )
             }
 
@@ -640,7 +518,7 @@ private fun OnboardingScreen(
                             .clip(CircleShape)
                             .background(
                                 if (index == page)
-                                    NovaraBlue
+                                    NovaraYellow
                                 else
                                     Color(0xFF56636C)
                             )
@@ -657,7 +535,7 @@ private fun OnboardingScreen(
                     .height(54.dp),
                 shape = RoundedCornerShape(16.dp),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = NovaraBlue,
+                    containerColor = NovaraYellow,
                     contentColor = Color(0xFF302500)
                 )
             ) {
@@ -704,16 +582,24 @@ private fun TermsScreenNative(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
 
-                Image(
-                    painter = painterResource(R.drawable.novara_logo),
-                    contentDescription = "Welcome to Novara",
-                    modifier = Modifier.size(52.dp)
-                )
+                Box(
+                    modifier = Modifier
+                        .size(60.dp)
+                        .clip(RoundedCornerShape(18.dp))
+                        .background(Color(0xFF101B40)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        "✦",
+                        fontSize = 31.sp,
+                        color = NovaraBlue
+                    )
+                }
 
                 Spacer(Modifier.height(14.dp))
 
                 Text(
-                    "Welcome to Novara",
+                    "Novara",
                     color = NovaraText,
                     fontSize = 30.sp,
                     fontWeight = FontWeight.Bold
@@ -802,7 +688,7 @@ private fun TermsScreenNative(
                         checked = checked,
                         onCheckedChange = { checked = it },
                         colors = CheckboxDefaults.colors(
-                            checkedColor = NovaraBlue,
+                            checkedColor = NovaraYellow,
                             uncheckedColor = NovaraMuted,
                             checkmarkColor = Color(0xFF342900)
                         )
@@ -826,7 +712,7 @@ private fun TermsScreenNative(
                         .height(54.dp),
                     shape = RoundedCornerShape(15.dp),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = NovaraBlue,
+                        containerColor = NovaraYellow,
                         disabledContainerColor = Color(0xFF705F20),
                         contentColor = Color(0xFF302500),
                         disabledContentColor = Color(0xFFB4A976)
@@ -1013,11 +899,7 @@ private fun LoginScreenNative(
                 modifier = Modifier.padding(22.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Image(
-    painter = painterResource(R.drawable.novara_logo),
-    contentDescription = "Novara AI",
-    modifier = Modifier.size(72.dp)
-)
+                NovaraLogo()
 
                 Spacer(Modifier.height(15.dp))
 
@@ -1145,7 +1027,7 @@ private fun LoginScreenNative(
                             )
                             Text(
                                 "Sign up",
-                                color = NovaraBlue,
+                                color = NovaraYellow,
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.Bold,
                                 modifier = Modifier.clickable { errorMessage = null; step = "signupInfo" }
@@ -1221,7 +1103,7 @@ private fun LoginScreenNative(
                                 .height(54.dp),
                             shape = RoundedCornerShape(13.dp),
                             colors = ButtonDefaults.buttonColors(
-                                containerColor = NovaraBlue,
+                                containerColor = NovaraYellow,
                                 contentColor = Color(0xFF302500)
                             )
                         ) {
@@ -1317,7 +1199,7 @@ private fun LoginScreenNative(
                                 .height(54.dp),
                             shape = RoundedCornerShape(13.dp),
                             colors = ButtonDefaults.buttonColors(
-                                containerColor = NovaraBlue,
+                                containerColor = NovaraYellow,
                                 contentColor = Color(0xFF302500)
                             )
                         ) {
@@ -1417,7 +1299,7 @@ private fun LoginScreenNative(
                                 .height(54.dp),
                             shape = RoundedCornerShape(13.dp),
                             colors = ButtonDefaults.buttonColors(
-                                containerColor = NovaraBlue,
+                                containerColor = NovaraYellow,
                                 contentColor = Color(0xFF302500)
                             )
                         ) {
@@ -1478,7 +1360,7 @@ private fun LoginScreenNative(
                                 .height(54.dp),
                             shape = RoundedCornerShape(13.dp),
                             colors = ButtonDefaults.buttonColors(
-                                containerColor = NovaraBlue,
+                                containerColor = NovaraYellow,
                                 contentColor = Color(0xFF302500)
                             )
                         ) {
@@ -1558,7 +1440,34 @@ private fun LoginButton(
     }
 }
 
-
+@Composable
+private fun NovaraLogo() {
+    Box(
+        modifier = Modifier
+            .size(64.dp)
+            .clip(RoundedCornerShape(18.dp))
+            .background(
+                Brush.linearGradient(
+                    listOf(
+                        Color(0xFF141044),
+                        Color(0xFF081B31)
+                    )
+                )
+            )
+            .border(
+                1.dp,
+                Color(0xFF284A73),
+                RoundedCornerShape(18.dp)
+            ),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            "✦",
+            fontSize = 31.sp,
+            color = NovaraBlue
+        )
+    }
+}
 
 @Composable
 private fun FeatureChip(text: String) {
@@ -1589,25 +1498,9 @@ private fun FeatureChip(text: String) {
 private fun NovaraLogoSplash(
     onFinished: () -> Unit
 ) {
-    var stage by remember {
-        mutableIntStateOf(0)
-    }
-
     LaunchedEffect(Unit) {
-        kotlinx.coroutines.delay(900)
-        stage = 1
-
-        kotlinx.coroutines.delay(1100)
-        stage = 2
-
-        kotlinx.coroutines.delay(900)
+        kotlinx.coroutines.delay(1200)
         onFinished()
-    }
-
-    val status = when (stage) {
-        0 -> "Loading"
-        1 -> "Initializing"
-        else -> "Ready"
     }
 
     Box(
@@ -1616,9 +1509,9 @@ private fun NovaraLogoSplash(
             .background(
                 Brush.verticalGradient(
                     listOf(
-                        Color(0xFF030912),
-                        Color(0xFF071A32),
-                        Color(0xFF02060B)
+                        Color(0xFF071018),
+                        Color(0xFF091823),
+                        Color(0xFF050B10)
                     )
                 )
             ),
@@ -1627,51 +1520,40 @@ private fun NovaraLogoSplash(
         Column(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Image(
-                painter = painterResource(R.drawable.novara_logo),
-                contentDescription = "Novara AI",
+            Box(
                 modifier = Modifier
-                    .size(112.dp)
+                    .size(96.dp)
                     .clip(RoundedCornerShape(28.dp))
-            )
-
-            Spacer(Modifier.height(28.dp))
-
-            Text(
-                text = "Welcome to Novara",
-                color = Color.White,
-                fontSize = 28.sp,
-                fontWeight = FontWeight.SemiBold
-            )
-
-            Spacer(Modifier.height(10.dp))
-
-            Text(
-                text = status,
-                color = Color(0xFF9DB0C7),
-                fontSize = 14.sp
-            )
-
-            Spacer(Modifier.height(18.dp))
-
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(7.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                repeat(3) { index ->
-                    Box(
-                        modifier = Modifier
-                            .size(if (index == stage) 8.dp else 6.dp)
-                            .clip(CircleShape)
-                            .background(
-                                if (index == stage)
-                                    Color(0xFF20CFFF)
-                                else
-                                    Color(0xFF43566C)
+                    .background(
+                        Brush.linearGradient(
+                            listOf(
+                                Color(0xFF101E43),
+                                Color(0xFF08182A)
                             )
+                        )
                     )
-                }
+                    .border(
+                        1.dp,
+                        Color(0xFF244A67),
+                        RoundedCornerShape(28.dp)
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "✦",
+                    fontSize = 48.sp,
+                    color = Color.White
+                )
             }
+
+            Spacer(Modifier.height(20.dp))
+
+            Text(
+                text = "Novara",
+                color = NovaraText,
+                fontSize = 34.sp,
+                fontWeight = FontWeight.Bold
+            )
         }
     }
 }

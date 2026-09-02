@@ -29,12 +29,12 @@
     </header>
 
     {% if not video_enabled %}
-            <div class="video-notice">
-              Video generation and editing are not connected to a provider yet.
-              See the "Video generation" section of the README for configuration instructions.
-              Until a provider is configured, this screen will be visible but videos cannot actually be generated.
-            </div>
-            {% endif %}
+    <div class="video-notice">
+      Video generation/editing abhi kisi provider se connect nahi hai. README ke "Video generation" section mein
+      <code>VIDEO_API_URL</code> aur <code>VIDEO_API_KEY</code> set karne ka tareeka likha hai — jab tak wo nahi kiya jaata,
+      ye screen UI dikhayegi lekin video actually generate nahi hogi.
+    </div>
+    {% endif %}
 
     <div class="video-studio">
       <div class="video-card">
@@ -50,7 +50,7 @@
           <select id="videoDuration">
             <option value="5">5 seconds</option>
             <option value="10">10 seconds</option>
-            <option value="15">15 seconds</option>
+            <option value="15">15 secondss</option>
           </select>
         </div>
         <button class="auth-btn" id="generateBtn">Generate Video</button>
@@ -116,16 +116,16 @@ document.querySelectorAll(".video-action-btn").forEach(btn => {
   btn.onclick = async () => {
     const statusBox = document.getElementById("videoEditStatus");
     const file = videoFileInput.files[0];
-    if (!file) { statusBox.textContent = "Please upload a video first."; return; }
+    if (!file) { statusBox.textContent = "Pehle ek video upload karein."; return; }
 
     const fd = new FormData();
     fd.append("file", file);
     fd.append("action", btn.dataset.action);
-    statusBox.textContent = "Processing…";
+    statusBox.textContent = "Process ho raha hai…";
     try {
       const res = await fetch("/api/video/edit", { method: "POST", body: fd });
       const data = await res.json();
-      statusBox.textContent = data.error ? data.error : "Done ✅";
+      statusBox.textContent = data.error ? data.error : "Ho gaya ✅";
     } catch (e) {
       statusBox.textContent = "Something went wrong. Please try again.";
     }

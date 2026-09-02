@@ -29,12 +29,12 @@
     </header>
 
     {% if not video_enabled %}
-            <div class="video-notice">
-              Video generation and editing are not connected to a provider yet.
-              See the "Video generation" section of the README for configuration instructions.
-              Until a provider is configured, this screen will be visible but videos cannot actually be generated.
-            </div>
-            {% endif %}
+    <div class="video-notice">
+      Video generation/editing abhi kisi provider se connect nahi hai. README ke "Video generation" section mein
+      <code>VIDEO_API_URL</code> aur <code>VIDEO_API_KEY</code> to learn how to configure them — until that is done,
+      this screen will be visible, but videos cannot actually be generated.
+    </div>
+    {% endif %}
 
     <div class="video-studio">
       <div class="video-card">

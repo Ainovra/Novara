@@ -34,12 +34,84 @@
 
   <!-- ===== Email + password screen ===== -->
   <div id="emailScreen" style="display:none;">
-    <button class="back-link" data-back>← Back</button>
-    <input type="text" id="username" placeholder="Username (3+ characters)" autocomplete="username">
-    <input type="password" id="password" placeholder="Password (6+ characters)" autocomplete="new-password">
-    <button id="signupBtn" class="auth-btn">Sign up</button>
+
+  <button class="back-link" data-back>
+    ← Back
+  </button>
+
+  <input
+    type="text"
+    id="first_name"
+    placeholder="First name"
+    autocomplete="given-name"
+    maxlength="50"
+    required
+  >
+
+  <input
+    type="text"
+    id="last_name"
+    placeholder="Last name"
+    autocomplete="family-name"
+    maxlength="50"
+    required
+  >
+
+  <input
+    type="text"
+    id="username"
+    placeholder="Username"
+    autocomplete="username"
+    minlength="3"
+    maxlength="30"
+    required
+  >
+
+  <input
+    type="email"
+    id="email"
+    placeholder="Email address"
+    autocomplete="email"
+    required
+  >
+
+  <input
+    type="tel"
+    id="phone_number"
+    placeholder="Phone number (optional)"
+    autocomplete="tel"
+  >
+
+  <input
+    type="password"
+    id="password"
+    placeholder="Password"
+    autocomplete="new-password"
+    required
+  >
+
+  <div style="font-size:12px;line-height:1.6;opacity:.7;margin:8px 0 12px;">
+    Password requirements:<br>
+    • 8 or more characters<br>
+    • Uppercase letter<br>
+    • Lowercase letter<br>
+    • Number<br>
+    • Special character
   </div>
 
+  <input
+    type="password"
+    id="confirm_password"
+    placeholder="Confirm password"
+    autocomplete="new-password"
+    required
+  >
+
+  <button id="signupBtn" class="auth-btn">
+    Create account
+  </button>
+
+</div>
 </div>
 
 <script>
@@ -66,21 +138,120 @@ document.querySelectorAll("[data-back]").forEach(btn => {
 });
 
 document.getElementById("signupBtn").onclick = async () => {
-  const username = document.getElementById("username").value.trim();
-  const password = document.getElementById("password").value;
 
-  const res = await fetch("/api/signup", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ username, password })
-  });
-  const data = await res.json();
+  hideError();
 
-  if (data.error) showError(data.error);
-  else window.location.href = data.redirect || "/terms";
+  const first_name =
+    document.getElementById("first_name").value.trim();
+
+  const last_name =
+    document.getElementById("last_name").value.trim();
+
+  const username =
+    document.getElementById("username").value.trim();
+
+  const email =
+    document.getElementById("email").value.trim();
+
+  const phone_number =
+    document.getElementById("phone_number").value.trim();
+
+  const password =
+    document.getElementById("password").value;
+
+  const confirm_password =
+    document.getElementById("confirm_password").value;
+
+  if (
+    !first_name ||
+    !last_name ||
+    !username ||
+    !email ||
+    !password ||
+    !confirm_password
+  ) {
+    showError("Please fill in all required fields.");
+    return;
+  }
+
+  if (password !== confirm_password) {
+    showError("Passwords do not match.");
+    return;
+  }
+
+  const btn =
+    document.getElementById("signupBtn");
+
+  btn.disabled = true;
+  btn.textContent = "Creating account...";
+
+  try {
+
+    const response = await fetch("/api/signup", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        first_name,
+        last_name,
+        username,
+        email,
+        phone_number,
+        password,
+        confirm_password
+      })
+    });
+
+    const data = await response.json();
+
+    if (!response.ok || data.error) {
+      showError(
+        data.error || "Unable to create account."
+      );
+
+      btn.disabled = false;
+      btn.textContent = "Create account";
+      return;
+    }
+
+    window.location.href =
+      data.redirect || "/verify-email";
+
+  } catch (error) {
+
+    showError(
+      "Unable to connect to Novara. Please try again."
+    );
+
+    btn.disabled = false;
+    btn.textContent = "Create account";
+  }
 };
-document.getElementById("password").addEventListener("keydown", (e) => {
-  if (e.key === "Enter") document.getElementById("signupBtn").click();
+[
+  "first_name",
+  "last_name",
+  "username",
+  "email",
+  "phone_number",
+  "password",
+  "confirm_password"
+].forEach(id => {
+
+  const field = document.getElementById(id);
+
+  if (field) {
+    field.addEventListener("keydown", e => {
+
+      if (e.key === "Enter") {
+        e.preventDefault();
+        document.getElementById("signupBtn").click();
+      }
+
+    });
+  }
+
+});
 });
 
 document.getElementById("guestBtn").onclick = async () => {

@@ -479,12 +479,8 @@ if (sendBtn) {
 
 // ===== Textarea auto-resize + enter to send =====
 function autoResize() {
-  if (!messageInput) return;
-  messageInput.style.height = "40px";
-  if (messageInput.value.trim()) {
-    messageInput.style.height =
-      Math.min(Math.max(messageInput.scrollHeight, 40), 88) + "px";
-  }
+  messageInput.style.height = "auto";
+  messageInput.style.height = Math.min(messageInput.scrollHeight, 140) + "px";
 }
 if (messageInput) {
   messageInput.addEventListener("input", () => { autoResize(); updateActionButton(); });

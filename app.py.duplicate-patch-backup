@@ -2193,65 +2193,39 @@ USER MESSAGE:
 # =========================
 
 def generate_image(prompt):
-    """Generate an image locally using SDXS via stable-diffusion.cpp."""
+    """Generate an image through Hugging Face Inference Providers and save it locally."""
+    if not HF_TOKEN:
+        return None, "HF_TOKEN not set on server."
+
     prompt = (prompt or "").strip()
     if not prompt:
         return None, "Image prompt is empty."
 
-    model_path = "/home/ubuntu/stable-diffusion.cpp/models/sdxs.safetensors"
-    sd_cli = "/home/ubuntu/stable-diffusion.cpp/build/bin/sd-cli"
-
-    if not os.path.isfile(model_path):
-        return None, f"SDXS model not found: {model_path}"
-
-    if not os.path.isfile(sd_cli):
-        return None, f"sd-cli not found: {sd_cli}"
-
+    # Preserve the user's requested subject instead of letting the model
+    # invent a different main subject.
     enhanced_prompt = (
         "Create exactly the image described by the user. Preserve named people, "
         "places, objects, teams, clothing, and the requested setting. Do not "
         "replace the main subject with an unrelated person or object. Do not "
         "add unrelated characters. Follow the user's composition and scene closely. "
-        "Generate a high-quality image. User request: " + prompt
+        "Generate a high-quality, photorealistic image unless the user requests "
+        "another style. User request: " + prompt
     )
 
     try:
-        import subprocess
+        client = InferenceClient(api_key=HF_TOKEN, provider="auto")
+        image = client.text_to_image(
+            prompt=enhanced_prompt,
+            model=HF_IMAGE_MODEL,
+        )
 
         filename = f"{uuid.uuid4()}_generated.png"
         save_path = os.path.join(UPLOAD_FOLDER, filename)
-
-        command = [
-            sd_cli,
-            "-m", model_path,
-            "-p", enhanced_prompt,
-            "-W", "512",
-            "-H", "512",
-            "-o", save_path
-        ]
-
-        result = subprocess.run(
-            command,
-            capture_output=True,
-            text=True,
-            timeout=120
-        )
-
-        if result.returncode != 0:
-            error = (result.stderr or result.stdout or "Unknown SDXS error").strip()
-            app.logger.error("SDXS ERROR: %s", error)
-            return None, f"SDXS image generation failed: {error}"
-
-        if not os.path.isfile(save_path):
-            return None, "SDXS completed but did not create an image."
-
+        image.save(save_path, format="PNG")
         return filename, None
 
-    except subprocess.TimeoutExpired:
-        return None, "SDXS image generation timed out."
     except Exception as e:
-        app.logger.exception("SDXS image generation exception")
-        return None, f"SDXS image generation failed: {e}"
+        return None, f"Hugging Face image generation failed: {e}"
 
 
 # =========================

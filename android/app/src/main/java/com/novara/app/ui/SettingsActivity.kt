@@ -1,4 +1,5 @@
 @file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+
 package com.novara.app.ui
 
 import android.content.Context
@@ -7,40 +8,69 @@ import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.Cloud
+import androidx.compose.material.icons.filled.Code
+import androidx.compose.material.icons.filled.DarkMode
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Fingerprint
+import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.Help
 import androidx.compose.material.icons.filled.Info
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material.icons.filled.Language
+import androidx.compose.material.icons.filled.Memory
+import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.PrivacyTip
+import androidx.compose.material.icons.filled.RecordVoiceOver
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material.icons.filled.VolumeUp
+import androidx.compose.material.icons.filled.VideoLibrary
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.RadioButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import kotlinx.coroutines.launch
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.novara.app.BuildConfig
 import com.novara.app.Config
@@ -48,17 +78,376 @@ import com.novara.app.ui.theme.NovaraTheme
 
 class SettingsActivity : ComponentActivity() {
 
-    override fun onCreate(
-        savedInstanceState: Bundle?
-    ) {
+    override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
         setContent {
             NovaraTheme {
-                NovaraSettingsScreen(
-                    onBack = {
-                        finish()
+                SettingsApp(
+                    onBack = { finish() }
+                )
+            }
+        }
+    }
+}
+
+private enum class SettingsPage {
+    HOME,
+    AI,
+    CAPABILITIES,
+    VOICE,
+    APPEARANCE,
+    PRIVACY,
+    MEMORY,
+    NOTIFICATIONS,
+    ACCOUNT,
+    HELP
+}
+
+@Composable
+private fun SettingsApp(
+    onBack: () -> Unit
+) {
+    var page by remember {
+        mutableStateOf(SettingsPage.HOME)
+    }
+
+    androidx.activity.compose.BackHandler(enabled = page != SettingsPage.HOME) {
+        page = SettingsPage.HOME
+    }
+
+    when (page) {
+        SettingsPage.HOME -> SettingsHome(
+            onBack = onBack,
+            open = { page = it }
+        )
+
+        SettingsPage.AI -> SubPage(
+            title = "AI & Models",
+            onBack = { page = SettingsPage.HOME }
+        ) {
+            AiSettings()
+        }
+
+        SettingsPage.CAPABILITIES -> SubPage(
+            title = "Capabilities",
+            onBack = { page = SettingsPage.HOME }
+        ) {
+            CapabilitySettings()
+        }
+
+        SettingsPage.VOICE -> SubPage(
+            title = "Voice & Language",
+            onBack = { page = SettingsPage.HOME }
+        ) {
+            VoiceSettings()
+        }
+
+        SettingsPage.APPEARANCE -> SubPage(
+            title = "Appearance",
+            onBack = { page = SettingsPage.HOME }
+        ) {
+            AppearanceSettings()
+        }
+
+        SettingsPage.PRIVACY -> SubPage(
+            title = "Privacy",
+            onBack = { page = SettingsPage.HOME }
+        ) {
+            PrivacySettings()
+        }
+
+        SettingsPage.MEMORY -> SubPage(
+            title = "Memory",
+            onBack = { page = SettingsPage.HOME }
+        ) {
+            MemorySettings()
+        }
+
+        SettingsPage.NOTIFICATIONS -> SubPage(
+            title = "Notifications",
+            onBack = { page = SettingsPage.HOME }
+        ) {
+            NotificationSettings()
+        }
+
+        SettingsPage.ACCOUNT -> SubPage(
+            title = "Account",
+            onBack = { page = SettingsPage.HOME }
+        ) {
+            AccountSettings()
+        }
+
+        SettingsPage.HELP -> SubPage(
+            title = "Help & About",
+            onBack = { page = SettingsPage.HOME }
+        ) {
+            HelpSettings()
+        }
+    }
+}
+
+@Composable
+private fun SettingsHome(
+    onBack: () -> Unit,
+    open: (SettingsPage) -> Unit
+) {
+    var search by remember { mutableStateOf("") }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = {
+                    Text(
+                        "Settings",
+                        fontWeight = FontWeight.SemiBold
+                    )
+                },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(
+                            Icons.Default.ArrowBack,
+                            contentDescription = "Back"
+                        )
                     }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor =
+                        MaterialTheme.colorScheme.background
+                )
+            )
+        }
+    ) { padding ->
+
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .padding(horizontal = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+
+            item {
+                Spacer(Modifier.height(4.dp))
+
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(24.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor =
+                            MaterialTheme.colorScheme.primaryContainer
+                    )
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(20.dp),
+                        verticalAlignment =
+                            Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(52.dp)
+                                .background(
+                                    MaterialTheme.colorScheme.primary,
+                                    RoundedCornerShape(18.dp)
+                                ),
+                            contentAlignment =
+                                Alignment.Center
+                        ) {
+                            Icon(
+                                Icons.Default.Person,
+                                contentDescription = null,
+                                tint =
+                                    MaterialTheme.colorScheme.onPrimary
+                            )
+                        }
+
+                        Spacer(Modifier.width(14.dp))
+
+                        Column(
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text(
+                                "Novara",
+                                style =
+                                    MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.Bold
+                            )
+
+                            Text(
+                                "Free plan",
+                                color =
+                                    MaterialTheme.colorScheme
+                                        .onPrimaryContainer
+                            )
+                        }
+
+                        Icon(
+                            Icons.Default.ChevronRight,
+                            contentDescription = null
+                        )
+                    }
+                }
+            }
+
+            item {
+                OutlinedTextField(
+                    value = search,
+                    onValueChange = { search = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    leadingIcon = {
+                        Icon(
+                            Icons.Default.Search,
+                            contentDescription = null
+                        )
+                    },
+                    placeholder = {
+                        Text("Search settings")
+                    },
+                    shape = RoundedCornerShape(16.dp)
+                )
+            }
+
+            item {
+                SettingsSectionTitle("AI & MODELS")
+            }
+
+            item {
+                SettingsCard {
+                    SettingsNavigationRow(
+                        Icons.Default.Memory,
+                        "AI & Models",
+                        "Models, image generation and tools"
+                    ) {
+                        open(SettingsPage.AI)
+                    }
+                }
+            }
+
+            item {
+                SettingsSectionTitle("CAPABILITIES")
+            }
+
+            item {
+                SettingsCard {
+                    SettingsNavigationRow(
+                        Icons.Default.Tune,
+                        "Capabilities",
+                        "Web search, code, files and tools"
+                    ) {
+                        open(SettingsPage.CAPABILITIES)
+                    }
+                }
+            }
+
+            item {
+                SettingsSectionTitle("VOICE & LANGUAGE")
+            }
+
+            item {
+                SettingsCard {
+                    SettingsNavigationRow(
+                        Icons.Default.RecordVoiceOver,
+                        "Voice & Language",
+                        "Language, speech and voice controls"
+                    ) {
+                        open(SettingsPage.VOICE)
+                    }
+                }
+            }
+
+            item {
+                SettingsSectionTitle("PERSONALIZATION")
+            }
+
+            item {
+                SettingsCard {
+                    SettingsNavigationRow(
+                        Icons.Default.Palette,
+                        "Appearance",
+                        "Theme and appearance preferences"
+                    ) {
+                        open(SettingsPage.APPEARANCE)
+                    }
+
+                    SettingsDivider()
+
+                    SettingsNavigationRow(
+                        Icons.Default.Memory,
+                        "Memory",
+                        "Control what Novara remembers"
+                    ) {
+                        open(SettingsPage.MEMORY)
+                    }
+
+                    SettingsDivider()
+
+                    SettingsNavigationRow(
+                        Icons.Default.Notifications,
+                        "Notifications",
+                        "Notification preferences"
+                    ) {
+                        open(SettingsPage.NOTIFICATIONS)
+                    }
+                }
+            }
+
+            item {
+                SettingsSectionTitle("PRIVACY & SECURITY")
+            }
+
+            item {
+                SettingsCard {
+                    SettingsNavigationRow(
+                        Icons.Default.PrivacyTip,
+                        "Privacy",
+                        "Incognito, retention and AI data"
+                    ) {
+                        open(SettingsPage.PRIVACY)
+                    }
+                }
+            }
+
+            item {
+                SettingsSectionTitle("ACCOUNT")
+            }
+
+            item {
+                SettingsCard {
+                    SettingsNavigationRow(
+                        Icons.Default.Person,
+                        "Account",
+                        "Profile, subscription and account actions"
+                    ) {
+                        open(SettingsPage.ACCOUNT)
+                    }
+
+                    SettingsDivider()
+
+                    SettingsNavigationRow(
+                        Icons.Default.Help,
+                        "Help & About",
+                        "Help, privacy and information about Novara"
+                    ) {
+                        open(SettingsPage.HELP)
+                    }
+                }
+            }
+
+            item {
+                Spacer(Modifier.height(8.dp))
+
+                Text(
+                    "Novara ${BuildConfig.VERSION_NAME}",
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 24.dp),
+                    color =
+                        MaterialTheme.colorScheme.onSurfaceVariant,
+                    style =
+                        MaterialTheme.typography.bodySmall
                 )
             }
         }
@@ -66,67 +455,512 @@ class SettingsActivity : ComponentActivity() {
 }
 
 @Composable
-private fun NovaraSettingsScreen(
-    onBack: () -> Unit
+private fun SettingsSectionTitle(
+    title: String
 ) {
-    val context = LocalContext.current
+    Text(
+        title,
+        modifier = Modifier.padding(
+            start = 4.dp,
+            top = 6.dp,
+            bottom = 2.dp
+        ),
+        style = MaterialTheme.typography.labelLarge,
+        fontWeight = FontWeight.Bold,
+        color = MaterialTheme.colorScheme.primary
+    )
+}
 
-    var webSearch by remember {
+@Composable
+private fun SettingsCard(
+    content: @Composable ColumnScope.() -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(
+            containerColor =
+                MaterialTheme.colorScheme.surfaceContainer
+        )
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            content = content
+        )
+    }
+}
+
+@Composable
+private fun SettingsDivider() {
+    HorizontalDivider(
+        modifier = Modifier.padding(horizontal = 16.dp),
+        color = MaterialTheme.colorScheme.outlineVariant
+    )
+}
+
+@Composable
+private fun SettingsNavigationRow(
+    icon: ImageVector,
+    title: String,
+    subtitle: String,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(16.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            icon,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(24.dp)
+        )
+
+        Spacer(Modifier.width(16.dp))
+
+        Column(
+            modifier = Modifier.weight(1f)
+        ) {
+            Text(
+                title,
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.Medium
+            )
+
+            Text(
+                subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+
+        Icon(
+            Icons.Default.ChevronRight,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+@Composable
+private fun SubPage(
+    title: String,
+    onBack: () -> Unit,
+    content: @Composable ColumnScope.() -> Unit
+) {
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = {
+                    Text(
+                        title,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(
+                            Icons.Default.ArrowBack,
+                            contentDescription = "Back"
+                        )
+                    }
+                }
+            )
+        }
+    ) { padding ->
+
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .padding(horizontal = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            item {
+                Spacer(Modifier.height(4.dp))
+            }
+
+            item {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    content = content
+                )
+            }
+
+            item {
+                Spacer(Modifier.height(24.dp))
+            }
+        }
+    }
+}
+
+@Composable
+private fun SettingSwitch(
+    title: String,
+    subtitle: String,
+    checked: Boolean,
+    onChange: (Boolean) -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(16.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(
+            modifier = Modifier.weight(1f)
+        ) {
+            Text(
+                title,
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.Medium
+            )
+
+            Text(
+                subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+
+        Switch(
+            checked = checked,
+            onCheckedChange = onChange
+        )
+    }
+}
+
+@Composable
+private fun SettingChoice(
+    title: String,
+    value: String,
+    onClick: () -> Unit
+) {
+    SettingsNavigationRow(
+        Icons.Default.Settings,
+        title,
+        value,
+        onClick
+    )
+}
+
+@Composable
+private fun AiSettings() {
+    val context = androidx.compose.ui.platform.LocalContext.current
+
+    var model by remember {
+        mutableStateOf(
+            NovaraSettings.getModel(context)
+        )
+    }
+
+    var imageModel by remember {
+        mutableStateOf(
+            NovaraSettings.getString(
+                context,
+                "image_model",
+                "Default"
+            )
+        )
+    }
+
+    Column(
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        SettingsSectionTitle("CHAT MODEL")
+
+        SettingsCard {
+            SettingChoice(
+                "Chat model",
+                when (model) {
+                    "thinking" -> "Thinking"
+                    "omega" -> "Omega"
+                    else -> "Fast"
+                }
+            ) {
+                val next =
+                    when (model) {
+                        "fast" -> "thinking"
+                        "thinking" -> "omega"
+                        else -> "fast"
+                    }
+
+                model = next
+                NovaraSettings.setModel(context, next)
+            }
+        }
+
+        SettingsSectionTitle("IMAGE GENERATION")
+
+        SettingsCard {
+            SettingChoice(
+                "Image generation model",
+                imageModel
+            ) {
+                imageModel =
+                    if (imageModel == "Default")
+                        "FLUX.1-dev"
+                    else
+                        "Default"
+
+                NovaraSettings.setString(
+                    context,
+                    "image_model",
+                    imageModel
+                )
+            }
+        }
+
+        SettingsSectionTitle("MODEL BEHAVIOUR")
+
+        SettingsCard {
+            SettingSwitch(
+                "Switch models when flagged",
+                "Automatically move to a safer model when needed.",
+                NovaraSettings.get(
+                    context,
+                    "switch_flagged_model",
+                    true
+                )
+            ) {
+                NovaraSettings.set(
+                    context,
+                    "switch_flagged_model",
+                    it
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun CapabilitySettings() {
+    val context = androidx.compose.ui.platform.LocalContext.current
+
+    var web by remember {
+        mutableStateOf(
+            NovaraSettings.get(context, "web_search", false)
+        )
+    }
+
+    var code by remember {
+        mutableStateOf(
+            NovaraSettings.get(context, "code_execution", false)
+        )
+    }
+
+    var files by remember {
+        mutableStateOf(
+            NovaraSettings.get(context, "files", true)
+        )
+    }
+
+    var tools by remember {
+        mutableStateOf(
+            NovaraSettings.getString(
+                context,
+                "tool_access",
+                "Auto"
+            )
+        )
+    }
+
+    Column(
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        SettingsSectionTitle("AI TOOLS")
+
+        SettingsCard {
+            SettingSwitch(
+                "Web search",
+                "Allow Novara to search the web.",
+                web
+            ) {
+                web = it
+                NovaraSettings.set(
+                    context,
+                    "web_search",
+                    it
+                )
+            }
+
+            SettingsDivider()
+
+            SettingSwitch(
+                "Code execution",
+                "Allow code execution and file creation.",
+                code
+            ) {
+                code = it
+                NovaraSettings.set(
+                    context,
+                    "code_execution",
+                    it
+                )
+            }
+
+            SettingsDivider()
+
+            SettingSwitch(
+                "Files & attachments",
+                "Allow files and attachments in conversations.",
+                files
+            ) {
+                files = it
+                NovaraSettings.set(
+                    context,
+                    "files",
+                    it
+                )
+            }
+        }
+
+        SettingsSectionTitle("TOOL ACCESS")
+
+        SettingsCard {
+            SettingChoice(
+                "Tool access",
+                tools
+            ) {
+                tools =
+                    when (tools) {
+                        "Auto" -> "On demand"
+                        "On demand" -> "Always available"
+                        else -> "Auto"
+                    }
+
+                NovaraSettings.setString(
+                    context,
+                    "tool_access",
+                    tools
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun VoiceSettings() {
+    val context = androidx.compose.ui.platform.LocalContext.current
+
+    var voice by remember {
         mutableStateOf(
             NovaraSettings.get(
                 context,
-                "web_search",
+                "voice_assistant",
                 true
             )
         )
     }
 
-    var imageGen by remember {
+    var language by remember {
         mutableStateOf(
-            NovaraSettings.get(
+            NovaraSettings.getString(
                 context,
-                "image_gen",
-                true
+                "language",
+                "Automatic"
             )
         )
     }
 
-    var artifacts by remember {
+    var style by remember {
         mutableStateOf(
-            NovaraSettings.get(
+            NovaraSettings.getString(
                 context,
-                "artifacts",
-                false
+                "voice_style",
+                "Kiran"
             )
         )
     }
 
-    var codeExecution by remember {
+    Column(
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        SettingsSectionTitle("VOICE")
+
+        SettingsCard {
+            SettingSwitch(
+                "Voice assistant",
+                "Enable voice controls in chat.",
+                voice
+            ) {
+                voice = it
+                NovaraSettings.set(
+                    context,
+                    "voice_assistant",
+                    it
+                )
+            }
+
+            SettingsDivider()
+
+            SettingChoice(
+                "Voice style",
+                style
+            ) {
+                style =
+                    when (style) {
+                        "Kiran" -> "Buttery"
+                        "Buttery" -> "Air"
+                        else -> "Kiran"
+                    }
+
+                NovaraSettings.setString(
+                    context,
+                    "voice_style",
+                    style
+                )
+            }
+        }
+
+        SettingsSectionTitle("LANGUAGE")
+
+        SettingsCard {
+            SettingChoice(
+                "Assistant language",
+                language
+            ) {
+                language =
+                    when (language) {
+                        "Automatic" -> "English (India)"
+                        "English (India)" -> "English (US)"
+                        "English (US)" -> "Hindi"
+                        else -> "Automatic"
+                    }
+
+                NovaraSettings.setString(
+                    context,
+                    "language",
+                    language
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun AppearanceSettings() {
+    val context = androidx.compose.ui.platform.LocalContext.current
+
+    var theme by remember {
         mutableStateOf(
-            NovaraSettings.get(
+            NovaraSettings.getString(
                 context,
-                "code_execution",
-                false
+                "theme",
+                "System"
             )
         )
     }
 
-    var switchFlagged by remember {
+    var font by remember {
         mutableStateOf(
-            NovaraSettings.get(
+            NovaraSettings.getString(
                 context,
-                "switch_flagged_model",
-                true
-            )
-        )
-    }
-
-    var memory by remember {
-        mutableStateOf(
-            NovaraSettings.get(
-                context,
-                "memory",
-                true
+                "font",
+                "Default"
             )
         )
     }
@@ -141,45 +975,76 @@ private fun NovaraSettingsScreen(
         )
     }
 
-    var voice by remember {
-        mutableStateOf(
-            NovaraSettings.get(
-                context,
-                "voice_assistant",
-                true
-            )
-        )
-    }
+    Column(
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        SettingsSectionTitle("THEME")
 
-    var files by remember {
-        mutableStateOf(
-            NovaraSettings.get(
-                context,
-                "files",
-                true
-            )
-        )
-    }
+        SettingsCard {
+            SettingChoice(
+                "Color mode",
+                theme
+            ) {
+                theme =
+                    when (theme) {
+                        "System" -> "Light"
+                        "Light" -> "Dark"
+                        else -> "System"
+                    }
 
-    var notifications by remember {
-        mutableStateOf(
-            NovaraSettings.get(
-                context,
-                "notifications",
-                true
-            )
-        )
-    }
+                NovaraSettings.setString(
+                    context,
+                    "theme",
+                    theme
+                )
+            }
+        }
 
-    var aiRetention by remember {
-        mutableStateOf(
-            NovaraSettings.get(
-                context,
-                "ai_data_retention",
-                true
-            )
-        )
+        SettingsSectionTitle("TEXT")
+
+        SettingsCard {
+            SettingChoice(
+                "Font style",
+                font
+            ) {
+                font =
+                    when (font) {
+                        "Default" -> "Inter"
+                        "Inter" -> "System"
+                        "System" -> "Serif"
+                        else -> "Default"
+                    }
+
+                NovaraSettings.setString(
+                    context,
+                    "font",
+                    font
+                )
+            }
+        }
+
+        SettingsSectionTitle("FEEDBACK")
+
+        SettingsCard {
+            SettingSwitch(
+                "Haptic feedback",
+                "Use vibration for supported interactions.",
+                haptic
+            ) {
+                haptic = it
+                NovaraSettings.set(
+                    context,
+                    "haptic",
+                    it
+                )
+            }
+        }
     }
+}
+
+@Composable
+private fun PrivacySettings() {
+    val context = androidx.compose.ui.platform.LocalContext.current
 
     var incognito by remember {
         mutableStateOf(
@@ -191,7 +1056,17 @@ private fun NovaraSettingsScreen(
         )
     }
 
-    var improveAi by remember {
+    var retention by remember {
+        mutableStateOf(
+            NovaraSettings.get(
+                context,
+                "ai_data_retention",
+                true
+            )
+        )
+    }
+
+    var improve by remember {
         mutableStateOf(
             NovaraSettings.get(
                 context,
@@ -201,1130 +1076,314 @@ private fun NovaraSettingsScreen(
         )
     }
 
-    var assistantEnabled by remember {
+    Column(
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        SettingsSectionTitle("PRIVACY")
+
+        SettingsCard {
+            SettingSwitch(
+                "Incognito mode",
+                "Use privacy-focused local preferences.",
+                incognito
+            ) {
+                incognito = it
+                NovaraSettings.set(
+                    context,
+                    "incognito_mode",
+                    it
+                )
+            }
+
+            SettingsDivider()
+
+            SettingSwitch(
+                "AI data retention",
+                "Control AI-related retention preferences.",
+                retention
+            ) {
+                retention = it
+                NovaraSettings.set(
+                    context,
+                    "ai_data_retention",
+                    it
+                )
+            }
+
+            SettingsDivider()
+
+            SettingSwitch(
+                "Help improve Novara",
+                "Allow this preference to be used for future improvement controls.",
+                improve
+            ) {
+                improve = it
+                NovaraSettings.set(
+                    context,
+                    "improve_ai_model",
+                    it
+                )
+            }
+        }
+
+        SettingsSectionTitle("LEGAL")
+
+        SettingsCard {
+            SettingsNavigationRow(
+                Icons.Default.PrivacyTip,
+                "Privacy policy",
+                "Read Novara's privacy information"
+            ) {
+                openUrl(
+                    context,
+                    Config.WEB_BASE_URL + "/privacy"
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun MemorySettings() {
+    val context = androidx.compose.ui.platform.LocalContext.current
+
+    var memory by remember {
         mutableStateOf(
             NovaraSettings.get(
                 context,
-                "assistant_enabled",
+                "memory",
                 true
             )
         )
     }
 
-    var model by remember {
-        mutableStateOf(
-            NovaraSettings.getModel(
-                context
-            )
-        )
-    }
-
-    var imageModel by remember {
-        mutableStateOf(
-            NovaraSettings.getString(
-                context,
-                "image_generation_model",
-                "Default"
-            )
-        )
-    }
-
-    var theme by remember {
-        mutableStateOf(
-            NovaraSettings.getString(
-                context,
-                "color_mode",
-                "System"
-            )
-        )
-    }
-
-    var font by remember {
-        mutableStateOf(
-            NovaraSettings.getString(
-                context,
-                "font_style",
-                "Default"
-            )
-        )
-    }
-
-    var language by remember {
-        mutableStateOf(
-            NovaraSettings.getString(
-                context,
-                "assistant_language",
-                "Automatic (detect input)"
-            )
-        )
-    }
-
-    var speechLanguage by remember {
-        mutableStateOf(
-            NovaraSettings.getString(
-                context,
-                "speech_language",
-                "System language"
-            )
-        )
-    }
-
-    var voiceStyle by remember {
-        mutableStateOf(
-            NovaraSettings.getString(
-                context,
-                "voice_style",
-                "Kiran"
-            )
-        )
-    }
-
-    var voiceMode by remember {
-        mutableStateOf(
-            NovaraSettings.getString(
-                context,
-                "voice_mode",
-                "Hands-free"
-            )
-        )
-    }
-
-    var toolAccess by remember {
-        mutableStateOf(
-            NovaraSettings.getString(
-                context,
-                "tool_access",
-                "Auto"
-            )
-        )
-    }
-
-    var choiceTitle by remember {
-        mutableStateOf<String?>(null)
-    }
-
-    var choiceValue by remember {
-        mutableStateOf("")
-    }
-
-    var choiceOptions by remember {
-        mutableStateOf(emptyList<String>())
-    }
-
-    fun openChoice(
-        title: String,
-        current: String,
-        options: List<String>
+    Column(
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        choiceTitle = title
-        choiceValue = current
-        choiceOptions = options
-    }
+        SettingsSectionTitle("MEMORY")
 
-    fun saveChoice(
-        value: String
-    ) {
-        when (choiceTitle) {
-            "Color mode" -> {
-                theme = value
-                NovaraSettings.setString(
+        SettingsCard {
+            SettingSwitch(
+                "Memory",
+                "Allow Novara to remember useful information.",
+                memory
+            ) {
+                memory = it
+                NovaraSettings.set(
                     context,
-                    "color_mode",
-                    value
+                    "memory",
+                    it
                 )
             }
 
-            "Font style" -> {
-                font = value
-                NovaraSettings.setString(
-                    context,
-                    "font_style",
-                    value
-                )
-            }
+            SettingsDivider()
 
-            "Assistant language" -> {
-                language = value
-                NovaraSettings.setString(
-                    context,
-                    "assistant_language",
-                    value
-                )
-            }
-
-            "Speech recognition" -> {
-                speechLanguage = value
-                NovaraSettings.setString(
-                    context,
-                    "speech_language",
-                    value
-                )
-            }
-
-            "Voice style" -> {
-                voiceStyle = value
-                NovaraSettings.setString(
-                    context,
-                    "voice_style",
-                    value
-                )
-            }
-
-            "Voice mode" -> {
-                voiceMode = value
-                NovaraSettings.setString(
-                    context,
-                    "voice_mode",
-                    value
-                )
-            }
-
-            "Tool access" -> {
-                toolAccess = value
-                NovaraSettings.setString(
-                    context,
-                    "tool_access",
-                    value
-                )
-            }
-
-            "Image Generation Model" -> {
-                imageModel = value
-                NovaraSettings.setString(
-                    context,
-                    "image_generation_model",
-                    value
-                )
-            }
-
-            "Chat model" -> {
-                val id =
-                    when (value) {
-                        "Fast" -> "fast"
-                        "Thinking" -> "thinking"
-                        "Omega" -> "omega"
-                        else -> "fast"
-                    }
-
-                model = id
-                NovaraSettings.setModel(
-                    context,
-                    id
+            SettingsNavigationRow(
+                Icons.Default.Folder,
+                "Your memory",
+                "View and manage remembered information"
+            ) {
+                context.startActivity(
+                    Intent(
+                        context,
+                        MemoryActivity::class.java
+                    )
                 )
             }
         }
-
-        choiceTitle = null
-        choiceOptions = emptyList()
     }
+}
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = {
-                    Text("Settings")
-                },
-                navigationIcon = {
-                    IconButton(
-                        onClick = onBack
-                    ) {
-                        Icon(
-                            Icons.Default.ArrowBack,
-                            contentDescription =
-                                "Back"
-                        )
-                    }
-                },
-                actions = {
-                    IconButton(
-                        onClick = {
-                            showInfo(context)
-                        }
-                    ) {
-                        Icon(
-                            Icons.Default.Info,
-                            contentDescription =
-                                "Information"
-                        )
-                    }
-                }
+@Composable
+private fun NotificationSettings() {
+    val context = androidx.compose.ui.platform.LocalContext.current
+
+    var notifications by remember {
+        mutableStateOf(
+            NovaraSettings.get(
+                context,
+                "notifications",
+                true
             )
-        }
-    ) { padding ->
+        )
+    }
 
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .padding(
-                    horizontal = 16.dp
-                ),
-            verticalArrangement =
-                Arrangement.spacedBy(4.dp)
-        ) {
-
-            item {
-                SettingsHeader(
-                    "Account"
-                )
-            }
-
-            item {
-                SettingsRow(
-                    "Profile",
-                    "Account profile",
-                    enabled = true
-                ) {
-                    toast(
-                        context,
-                        "Profile management uses your Novara account."
-                    )
-                }
-            }
-
-            item {
-                SettingsRow(
-                    "Billing",
-                    "Free plan",
-                    enabled = true
-                ) {
-                    toast(
-                        context,
-                        "Billing is managed by your Novara account."
-                    )
-                }
-            }
-
-            item {
-                SettingsHeader(
-                    "Capabilities"
-                )
-            }
-
-            item {
-                SettingsToggle(
-                    "Web search",
-                    "Let Novara search the web when needed.",
-                    webSearch
-                ) {
-                    webSearch = it
-                    if (it) imageGen = false
-                    NovaraSettings.set(
-                        context,
-                        "web_search",
-                        it
-                    )
-                    if (it) {
-                        NovaraSettings.set(
-                            context,
-                            "image_gen",
-                            false
-                        )
-                    }
-                }
-            }
-
-            item {
-                SettingsToggle(
-                    "Artifacts",
-                    "Required by code execution.",
-                    artifacts,
-                    enabled = codeExecution
-                ) {
-                    artifacts = it
-                    NovaraSettings.set(
-                        context,
-                        "artifacts",
-                        it
-                    )
-                }
-            }
-
-            item {
-                SettingsToggle(
-                    "Code execution and file creation",
-                    "Allow Novara to execute code and create files.",
-                    codeExecution
-                ) {
-                    codeExecution = it
-                    if (!it) artifacts = false
-
-                    NovaraSettings.set(
-                        context,
-                        "code_execution",
-                        it
-                    )
-
-                    NovaraSettings.set(
-                        context,
-                        "artifacts",
-                        artifacts
-                    )
-                }
-            }
-
-            item {
-                SettingsToggle(
-                    "Switch models when a message is flagged",
-                    "Automatically switch to a safer model when enabled.",
-                    switchFlagged
-                ) {
-                    switchFlagged = it
-                    NovaraSettings.set(
-                        context,
-                        "switch_flagged_model",
-                        it
-                    )
-                }
-            }
-
-            item {
-                SettingsHeader(
-                    "Memory"
-                )
-            }
-
-            item {
-                SettingsToggle(
-                    "Memory",
-                    "Let Novara remember useful information.",
-                    memory
-                ) {
-                    memory = it
-                    NovaraSettings.set(
-                        context,
-                        "memory",
-                        it
-                    )
-                }
-            }
-
-            item {
-                SettingsRow(
-                    "Your memory files",
-                    "View and manage what Novara remembers.",
-                    enabled = memory
-                ) {
-                    toast(
-                        context,
-                        "Memory management is ready for the connected backend."
-                    )
-                }
-            }
-
-            item {
-                ChoiceRow(
-                    title = "Tool access",
-                    value = toolAccess
-                ) {
-                    openChoice(
-                        "Tool access",
-                        toolAccess,
-                        listOf(
-                            "Auto",
-                            "On demand",
-                            "Always available"
-                        )
-                    )
-                }
-            }
-
-            item {
-                SettingsHeader(
-                    "Assistant"
-                )
-            }
-
-            item {
-                SettingsToggle(
-                    "Enable assistant",
-                    "Enable Novara assistant features.",
-                    assistantEnabled
-                ) {
-                    assistantEnabled = it
-                    NovaraSettings.set(
-                        context,
-                        "assistant_enabled",
-                        it
-                    )
-                }
-            }
-
-            item {
-                SettingsRow(
-                    "How to access",
-                    "Chat, voice and assistant controls."
-                ) {
-                    toast(
-                        context,
-                        "Use the Novara chat and microphone controls."
-                    )
-                }
-            }
-
-            item {
-                SettingsRow(
-                    "Permissions",
-                    "Manage Android permissions."
-                ) {
-                    try {
-                        context.startActivity(
-                            Intent(
-                                android.provider.Settings
-                                    .ACTION_APPLICATION_DETAILS_SETTINGS,
-                                Uri.parse(
-                                    "package:" +
-                                        context.packageName
-                                )
-                            )
-                        )
-                    } catch (_: Exception) {
-                        toast(
-                            context,
-                            "Android settings could not be opened."
-                        )
-                    }
-                }
-            }
-
-            item {
-                ChoiceRow(
-                    title = "Assistant language",
-                    value = language
-                ) {
-                    openChoice(
-                        "Assistant language",
-                        language,
-                        listOf(
-                            "Automatic (detect input)",
-                            "English (India)",
-                            "English (US)",
-                            "Hindi"
-                        )
-                    )
-                }
-            }
-
-            item {
-                ChoiceRow(
-                    title = "Speech recognition",
-                    value = speechLanguage
-                ) {
-                    openChoice(
-                        "Speech recognition",
-                        speechLanguage,
-                        listOf(
-                            "System language",
-                            "English (India)",
-                            "English (US)",
-                            "Hindi"
-                        )
-                    )
-                }
-            }
-
-            item {
-                ChoiceRow(
-                    title = "Voice style",
-                    value = voiceStyle
-                ) {
-                    openChoice(
-                        "Voice style",
-                        voiceStyle,
-                        listOf(
-                            "Kiran",
-                            "Buttery",
-                            "Air"
-                        )
-                    )
-                }
-            }
-
-            item {
-                ChoiceRow(
-                    title = "Voice mode",
-                    value = voiceMode
-                ) {
-                    openChoice(
-                        "Voice mode",
-                        voiceMode,
-                        listOf(
-                            "Hands-free",
-                            "Press to talk"
-                        )
-                    )
-                }
-            }
-
-            item {
-                SettingsHeader(
-                    "Profile & Personalize"
-                )
-            }
-
-            item {
-                ChoiceRow(
-                    title = "Chat model",
-                    value =
-                        when (model) {
-                            "thinking" -> "Thinking"
-                            "omega" -> "Omega"
-                            else -> "Fast"
-                        }
-                ) {
-                    openChoice(
-                        "Chat model",
-                        when (model) {
-                            "thinking" -> "Thinking"
-                            "omega" -> "Omega"
-                            else -> "Fast"
-                        },
-                        listOf(
-                            "Fast",
-                            "Thinking",
-                            "Omega"
-                        )
-                    )
-                }
-            }
-
-            item {
-                ChoiceRow(
-                    title = "Image Generation Model",
-                    value = imageModel
-                ) {
-                    openChoice(
-                        "Image Generation Model",
-                        imageModel,
-                        listOf(
-                            "Default",
-                            "FLUX.1-dev"
-                        )
-                    )
-                }
-            }
-
-            item {
-                SettingsRow(
-                    "Personalize",
-                    "Customize Novara for you."
-                ) {
-                    toast(
-                        context,
-                        "Personalization settings saved locally."
-                    )
-                }
-            }
-
-            item {
-                SettingsRow(
-                    "Connectors",
-                    "Connect services when supported."
-                ) {
-                    toast(
-                        context,
-                        "No external connectors configured yet."
-                    )
-                }
-            }
-
-            item {
-                SettingsHeader(
-                    "Appearance"
-                )
-            }
-
-            item {
-                ChoiceRow(
-                    title = "Color mode",
-                    value = theme
-                ) {
-                    openChoice(
-                        "Color mode",
-                        theme,
-                        listOf(
-                            "System",
-                            "Light",
-                            "Dark"
-                        )
-                    )
-                }
-            }
-
-            item {
-                ChoiceRow(
-                    title = "Font style",
-                    value = font
-                ) {
-                    openChoice(
-                        "Font style",
-                        font,
-                        listOf(
-                            "Default",
-                            "Inter",
-                            "System",
-                            "Serif"
-                        )
-                    )
-                }
-            }
-
-            item {
-                SettingsToggle(
-                    "Haptic feedback",
-                    "Use vibration feedback for supported actions.",
-                    haptic
-                ) {
-                    haptic = it
-                    NovaraSettings.set(
-                        context,
-                        "haptic",
-                        it
-                    )
-                }
-            }
-
-            item {
-                SettingsToggle(
-                    "Voice assistant",
-                    "Enable voice input controls in chat.",
-                    voice
-                ) {
-                    voice = it
-                    NovaraSettings.set(
-                        context,
-                        "voice_assistant",
-                        it
-                    )
-                }
-            }
-
-            item {
-                SettingsToggle(
-                    "Files & attachments",
-                    "Allow file and attachment tools.",
-                    files
-                ) {
-                    files = it
-                    NovaraSettings.set(
-                        context,
-                        "files",
-                        it
-                    )
-                }
-            }
-
-            item {
-                SettingsHeader(
-                    "Privacy & Behaviour"
-                )
-            }
-
-            item {
-                SettingsToggle(
-                    "Incognito Mode",
-                    "Use a privacy-focused local preference.",
-                    incognito
-                ) {
-                    incognito = it
-                    NovaraSettings.set(
-                        context,
-                        "incognito_mode",
-                        it
-                    )
-                }
-            }
-
-            item {
-                SettingsToggle(
-                    "Notifications",
-                    "Allow Novara notification preferences.",
-                    notifications
-                ) {
-                    notifications = it
-                    NovaraSettings.set(
-                        context,
-                        "notifications",
-                        it
-                    )
-                }
-            }
-
-            item {
-                SettingsToggle(
-                    "AI Data Retention",
-                    "Control whether AI-related retention is enabled.",
-                    aiRetention
-                ) {
-                    aiRetention = it
-                    NovaraSettings.set(
-                        context,
-                        "ai_data_retention",
-                        it
-                    )
-                }
-            }
-
-            item {
-                SettingsToggle(
-                    "Help us improve Novara's AI model",
-                    "Allow this preference to be remembered for future AI improvement controls.",
-                    improveAi
-                ) {
-                    improveAi = it
-                    NovaraSettings.set(
-                        context,
-                        "improve_ai_model",
-                        it
-                    )
-                }
-            }
-
-            item {
-                SettingsRow(
-                    "Time & focus",
-                    "Focus-related preferences."
-                ) {
-                    toast(
-                        context,
-                        "Time & focus controls are not connected to the backend yet."
-                    )
-                }
-            }
-
-            item {
-                SettingsRow(
-                    "Privacy",
-                    "Read Novara privacy information."
-                ) {
-                    openWeb(
-                        context,
-                        Config.WEB_BASE_URL +
-                            "/privacy"
-                    )
-                }
-            }
-
-            item {
-                SettingsRow(
-                    "Shared links",
-                    "Manage shared conversations."
-                ) {
-                    toast(
-                        context,
-                        "Shared links are managed from conversation actions."
-                    )
-                }
-            }
-
-            item {
-                SettingsHeader(
-                    "Help Center"
-                )
-            }
-
-            item {
-                SettingsRow(
-                    "Get started",
-                    "Welcome to Novara."
-                ) {
-                    openWeb(
-                        context,
-                        Config.WEB_BASE_URL +
-                            "/welcome"
-                    )
-                }
-            }
-
-            item {
-                SettingsRow(
-                    "What is Pro Search",
-                    "Learn about web-search style tools."
-                ) {
-                    toast(
-                        context,
-                        "Novara web search is enabled from chat."
-                    )
-                }
-            }
-
-            item {
-                SettingsRow(
-                    "Help & FAQ",
-                    "Get help with Novara."
-                ) {
-                    toast(
-                        context,
-                        "Help center is available from the Novara website."
-                    )
-                }
-            }
-
-            item {
-                SettingsHeader(
-                    "Account"
-                )
-            }
-
-            item {
-                SettingsRow(
-                    "Logout",
-                    "Sign out of Novara."
-                ) {
-                    openWeb(
-                        context,
-                        Config.WEB_BASE_URL +
-                            "/logout"
-                    )
-                    onBack()
-                }
-            }
-
-            item {
-                SettingsRow(
-                    "Delete Account",
-                    "Request permanent account deletion."
-                ) {
-                    openWeb(
-                        context,
-                        Config.WEB_BASE_URL +
-                            "/account/delete-request"
-                    )
-                }
-            }
-
-            item {
-                Text(
-                    "App version ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})",
-                    modifier =
-                        Modifier.padding(
-                            vertical = 18.dp
-                        ),
-                    color =
-                        MaterialTheme
-                            .colorScheme
-                            .onSurfaceVariant
+    Column {
+        SettingsCard {
+            SettingSwitch(
+                "Notifications",
+                "Allow Novara notification preferences.",
+                notifications
+            ) {
+                notifications = it
+                NovaraSettings.set(
+                    context,
+                    "notifications",
+                    it
                 )
             }
         }
     }
+}
 
-    choiceTitle?.let { title ->
+@Composable
+private fun AccountSettings() {
+    val context = androidx.compose.ui.platform.LocalContext.current
 
-        AlertDialog(
-            onDismissRequest = {
-                choiceTitle = null
-                choiceOptions = emptyList()
-            },
-            title = {
-                Text(title)
-            },
-            text = {
-                Column {
-                    choiceOptions.forEach { option ->
-                        Row(
-                            modifier =
-                                Modifier
-                                    .fillMaxWidth()
-                                    .clickable {
-                                        saveChoice(
-                                            option
-                                        )
-                                    }
-                                    .padding(
-                                        vertical = 6.dp
-                                    ),
-                            verticalAlignment =
-                                Alignment.CenterVertically
+    Column(
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        SettingsSectionTitle("ACCOUNT")
+
+        SettingsCard {
+            SettingsNavigationRow(
+                Icons.Default.Person,
+                "Profile",
+                "Manage your Novara profile"
+            ) {
+                context.startActivity(Intent(context, ProfileActivity::class.java))
+            }
+
+            SettingsDivider()
+
+            SettingsNavigationRow(
+                Icons.Default.Settings,
+                "Billing",
+                "Free plan"
+            ) {
+                context.startActivity(Intent(context, BillingActivity::class.java))
+
+                        }
+                        SettingsDivider()
+
+                        SettingsNavigationRow(
+                            Icons.Default.VideoLibrary,
+                            "Video Studio",
+                            "Create and generate AI videos"
                         ) {
-                            RadioButton(
-                                selected =
-                                    choiceValue ==
-                                        option,
-                                onClick = {
-                                    saveChoice(
-                                        option
-                                    )
+                            context.startActivity(
+                                Intent(context, VideoStudioActivity::class.java)
+                            )
+                        }
+            }
+
+        SettingsSectionTitle("ACCOUNT ACTIONS")
+
+        SettingsCard {
+            SettingsNavigationRow(
+                Icons.Default.ArrowBack,
+                "Log out",
+                "Sign out of Novara"
+            ) {
+                kotlinx.coroutines.CoroutineScope(
+                    kotlinx.coroutines.Dispatchers.Main
+                ).launch {
+                    when (
+                        val result =
+                            com.novara.app.network.ApiClient.logout()
+                    ) {
+                        is com.novara.app.network.ApiClient.ApiResult.Success -> {
+                            context.getSharedPreferences(
+                                "novara_prefs",
+                                Context.MODE_PRIVATE
+                            ).edit()
+                                .putBoolean("logged_in", false)
+                                .apply()
+
+                            toast(
+                                context,
+                                "Logged out successfully."
+                            )
+
+                            context.startActivity(
+                                Intent(
+                                    context,
+                                    com.novara.app.MainActivity::class.java
+                                ).apply {
+                                    flags =
+                                        Intent.FLAG_ACTIVITY_NEW_TASK or
+                                        Intent.FLAG_ACTIVITY_CLEAR_TASK
                                 }
                             )
+                        }
 
-                            Spacer(
-                                Modifier.width(8.dp)
-                            )
-
-                            Text(option)
+                        is com.novara.app.network.ApiClient.ApiResult.Failure -> {
+                            toast(context, result.message)
                         }
                     }
                 }
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        choiceTitle = null
-                        choiceOptions = emptyList()
-                    }
-                ) {
-                    Text("Close")
-                }
             }
-        )
-    }
-}
 
-@Composable
-private fun SettingsHeader(
-    title: String
-) {
-    Text(
-        title,
-        modifier =
-            Modifier.padding(
-                top = 18.dp,
-                bottom = 6.dp
-            ),
-        style =
-            MaterialTheme.typography.titleMedium,
-        color =
-            MaterialTheme
-                .colorScheme
-                .primary
-    )
-}
+            SettingsDivider()
 
-@Composable
-private fun SettingsToggle(
-    title: String,
-    subtitle: String,
-    checked: Boolean,
-    enabled: Boolean = true,
-    onChange: (Boolean) -> Unit
-) {
-    Row(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .padding(
-                    vertical = 7.dp
-                ),
-        verticalAlignment =
-            Alignment.CenterVertically
-    ) {
-        Column(
-            modifier =
-                Modifier.weight(1f)
-        ) {
-            Text(
-                title,
-                style =
-                    MaterialTheme
-                        .typography
-                        .bodyLarge
-            )
-
-            Text(
-                subtitle,
-                color =
-                    MaterialTheme
-                        .colorScheme
-                        .onSurfaceVariant,
-                style =
-                    MaterialTheme
-                        .typography
-                        .bodySmall
-            )
-        }
-
-        Switch(
-            checked = checked,
-            enabled = enabled,
-            onCheckedChange = onChange
-        )
-    }
-}
-
-@Composable
-private fun SettingsRow(
-    title: String,
-    subtitle: String,
-    enabled: Boolean = true,
-    onClick: () -> Unit
-) {
-    Row(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .clickable(
-                    enabled = enabled,
-                    onClick = onClick
+            SettingsNavigationRow(
+                Icons.Default.Delete,
+                "Delete account",
+                "Request permanent account deletion"
+            ) {
+                context.startActivity(
+                    Intent(context, WebViewActivity::class.java).apply {
+                        putExtra("path", "/account/delete-request")
+                    }
                 )
-                .padding(
-                    vertical = 9.dp
-                ),
-        verticalAlignment =
-            Alignment.CenterVertically
-    ) {
-        Column(
-            modifier =
-                Modifier.weight(1f)
-        ) {
-            Text(
-                title,
-                style =
-                    MaterialTheme
-                        .typography
-                        .bodyLarge
-            )
-
-            Text(
-                subtitle,
-                color =
-                    MaterialTheme
-                        .colorScheme
-                        .onSurfaceVariant,
-                style =
-                    MaterialTheme
-                        .typography
-                        .bodySmall
-            )
+            }
         }
-
-        Text(
-            "›",
-            style =
-                MaterialTheme
-                    .typography
-                    .headlineSmall
-        )
     }
 }
 
 @Composable
-private fun ChoiceRow(
-    title: String,
-    value: String,
-    onClick: () -> Unit
-) {
-    SettingsRow(
-        title = title,
-        subtitle = value,
-        onClick = onClick
-    )
+private fun HelpSettings() {
+    val context = androidx.compose.ui.platform.LocalContext.current
+
+    Column(
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        SettingsSectionTitle("HELP")
+
+        SettingsCard {
+            SettingsNavigationRow(
+                Icons.Default.Help,
+                "Help & FAQ",
+                "Get help with Novara"
+            ) {
+                openUrl(
+                    context,
+                    Config.WEB_BASE_URL + "/welcome"
+                )
+            }
+
+            SettingsDivider()
+
+            SettingsNavigationRow(
+                Icons.Default.Cloud,
+                "Privacy",
+                "Read Novara privacy information"
+            ) {
+                openUrl(
+                    context,
+                    Config.WEB_BASE_URL + "/privacy"
+                )
+            }
+        }
+
+        SettingsSectionTitle("ABOUT")
+
+        SettingsCard {
+            SettingsNavigationRow(
+                Icons.Default.Info,
+                "About Novara",
+                "Version ${BuildConfig.VERSION_NAME}"
+            ) {
+                toast(
+                    context,
+                    "Novara ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})"
+                )
+            }
+        }
+    }
 }
 
-private fun toast(
-    context: Context,
-    message: String
-) {
-    android.widget.Toast
-        .makeText(
-            context,
-            message,
-            android.widget.Toast.LENGTH_SHORT
-        )
-        .show()
-}
-
-private fun openWeb(
+private fun openUrl(
     context: Context,
     url: String
 ) {
@@ -1336,21 +1395,17 @@ private fun openWeb(
             )
         )
     } catch (_: Exception) {
-        toast(
-            context,
-            "Could not open this page."
-        )
+        toast(context, "Could not open this page.")
     }
 }
 
-private fun showInfo(
-    context: Context
+private fun toast(
+    context: Context,
+    message: String
 ) {
-    android.widget.Toast
-        .makeText(
-            context,
-            "Novara settings",
-            android.widget.Toast.LENGTH_SHORT
-        )
-        .show()
+    android.widget.Toast.makeText(
+        context,
+        message,
+        android.widget.Toast.LENGTH_SHORT
+    ).show()
 }

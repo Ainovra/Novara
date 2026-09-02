@@ -5,3 +5,59 @@
 android/gradle-8.13/
 android/gradle-8.13-bin.zip
 *.apk
+
+# Large local TTS model — never commit to GitHub
+tts/kokoro/model.onnx
+
+# Local Android project and generated files
+android_backup/
+.github/
+__pycache__/
+*.pyc
+
+# Local backups
+*.bak
+*.backup
+backups/
+final_prebuild_backup/
+final_ui_backup_*/
+phase1_backup/
+pre_auto_update_backup/
+pre_backend_api_*/
+pre_final_backup/
+ui_fix_backup_*/
+
+# Local build/APK files
+*.apk
+*.aab
+*.log
+novara.db
+cookies.txt
+tts/
+
+# Local Novara development/backup files
+UPDATE_NOTES.md
+fix-review.txt
+kokoro_local_tts.py
+migrate_signup.py
+patch_*.py
+phase1/
+phase2/
+phase3-build-error.txt
+release*.sh
+setup_signup.sh
+test_sdxl.png
+version.json
+app.py.backup*
+app.py.before*
+release_apk.py
+
+# Android local/build files
+android/.gradle/
+android/.kotlin/
+android/build/
+android/app/build/
+android/gradle-*/
+android/local.properties
+android/*.keystore
+android/*.jks

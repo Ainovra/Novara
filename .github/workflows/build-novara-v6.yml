@@ -1,0 +1,47 @@
+name: Build Novara APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - master
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+
+      - name: Make gradlew executable
+        run: chmod +x android/gradlew
+
+      - name: Build Debug APK
+        working-directory: android
+        run: ./gradlew :app:assembleDebug --stacktrace --console=plain
+
+      - name: Find APK
+        id: apk
+        run: |
+          APK=$(find android/app/build/outputs/apk/debug -type f -name '*.apk' | head -n 1)
+          echo "apk=$APK" >> "$GITHUB_OUTPUT"
+          echo "Built: $APK"
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: novara-admob-debug-apk
+          path: ${{ steps.apk.outputs.apk }}
+          if-no-files-found: error

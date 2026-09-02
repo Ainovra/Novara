@@ -11,6 +11,7 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.MultipartBody
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.RequestBody
 import okhttp3.RequestBody.Companion.asRequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
@@ -23,20 +24,72 @@ import java.util.concurrent.TimeUnit
 
 object ApiClient {
 
+    /*
+     * Persistent session cookies.
+     *
+     * Flask uses the session cookie to identify the guest/account.
+     * Keeping cookies only in ConcurrentHashMap meant the session was
+     * lost whenever Android killed the app process.
+     *
+     * Cookies are now persisted in SharedPreferences so guest
+     * conversations remain attached to the same server-side user.
+     */
     private val cookieStore = ConcurrentHashMap<String, List<Cookie>>()
+
+    private val cookiePrefs by lazy {
+        com.novara.app.NovaraApp.instance
+            .getSharedPreferences(
+                "novara_http_cookies",
+                android.content.Context.MODE_PRIVATE
+            )
+    }
+
+    private fun cookieKey(url: HttpUrl): String =
+        "cookies_${url.host}"
 
     private val cookieJar = object : CookieJar {
         override fun saveFromResponse(
             url: HttpUrl,
             cookies: List<Cookie>
         ) {
-            if (cookies.isNotEmpty()) {
-                cookieStore[url.host] = cookies
-            }
+            if (cookies.isEmpty()) return
+
+            val existing = cookieStore[url.host].orEmpty()
+
+            val merged = (existing + cookies)
+                .distinctBy { "${it.name}|${it.domain}|${it.path}" }
+                .filter { it.expiresAt >= System.currentTimeMillis() }
+
+            cookieStore[url.host] = merged
+
+            cookiePrefs.edit()
+                .putString(
+                    cookieKey(url),
+                    merged.joinToString("\n") { it.toString() }
+                )
+                .apply()
         }
 
         override fun loadForRequest(url: HttpUrl): List<Cookie> {
-            return cookieStore[url.host] ?: emptyList()
+            val cookies = cookieStore[url.host]
+                ?: cookiePrefs
+                    .getString(cookieKey(url), null)
+                    ?.lines()
+                    ?.mapNotNull { line ->
+                        try {
+                            Cookie.parse(url, line)
+                        } catch (_: Exception) {
+                            null
+                        }
+                    }
+                    ?.also {
+                        cookieStore[url.host] = it
+                    }
+                ?: emptyList()
+
+            return cookies.filter {
+                it.expiresAt >= System.currentTimeMillis()
+            }
         }
     }
 
@@ -57,6 +110,22 @@ object ApiClient {
         data class Success<T>(val data: T) : ApiResult<T>()
         data class Failure(val message: String) : ApiResult<Nothing>()
     }
+
+    data class UserProfile(
+        val username: String?,
+        val email: String?,
+        val phoneNumber: String?,
+        val isGuest: Boolean,
+        val signedInWithGoogle: Boolean,
+        val createdAt: String?
+    )
+
+    data class MemoryItem(
+        val id: String,
+        val content: String,
+        val source: String?,
+        val createdAt: String?
+    )
 
     data class AuthResponse(
         val ok: Boolean,
@@ -92,11 +161,61 @@ object ApiClient {
         val url: String?
     )
 
+    data class VideoResponse(
+        val ok: Boolean,
+        val video: String?,
+        val videoUrl: String?,
+        val model: String?,
+        val videoType: String?
+    )
+
+
     data class UploadResult(
         val path: String,
         val type: String,
         val url: String
     )
+
+    data class UsageItem(
+        val used: Int,
+        val limit: Int,
+        val remaining: Int
+    )
+
+    data class RewardedAdsUsage(
+        val used: Int,
+        val limit: Int,
+        val remaining: Int
+    )
+
+    data class RewardedClaimResponse(
+        val ok: Boolean,
+        val mission: String,
+        val rewardedAds: Int,
+        val limit: Int,
+        val imageCreditsAdded: Int,
+        val audioVideoCreditsAdded: Int,
+        val message: String
+    )
+
+    data class GoogleBillingVerificationResponse(
+    val ok: Boolean,
+    val verified: Boolean,
+    val plan: String?,
+    val productId: String?,
+    val expiry: String?,
+    val orderId: String?
+)
+
+data class UsageResponse(
+        val plan: String,
+        val month: String?,
+        val images: UsageItem,
+        val silentVideos: UsageItem,
+        val audioVideo: UsageItem,
+        val rewardedAds: RewardedAdsUsage
+    )
+
 
     private fun errorMessage(
         responseCode: Int,
@@ -180,9 +299,259 @@ object ApiClient {
             }
         }
 
+
+    // =========================
+    // REWARDED AD
+    // =========================
+
+    suspend fun claimRewardedAd(claimId: String): ApiResult<RewardedClaimResponse> =
+        withContext(Dispatchers.IO) {
+            try {
+                val requestBody = JSONObject().apply {
+                    put("claim_id", claimId)
+                }.toString()
+
+                val request = Request.Builder()
+                    .url(BASE_URL + "/api/rewarded-ad/claim")
+                    .post(
+                        RequestBody.create(
+                            "application/json".toMediaType(),
+                            requestBody
+                        )
+                    )
+                    .build()
+
+                client.newCall(request).execute().use { response ->
+                    val text = response.body?.string().orEmpty()
+
+                    if (!response.isSuccessful) {
+                        val message =
+                            try {
+                                JSONObject(text)
+                                    .optString(
+                                        "error",
+                                        "Unable to claim reward."
+                                    )
+                            } catch (_: Exception) {
+                                "Unable to claim reward."
+                            }
+
+                        return@withContext ApiResult.Failure(message)
+                    }
+
+                    val json = JSONObject(text)
+
+                    ApiResult.Success(
+                        RewardedClaimResponse(
+                            ok = json.optBoolean("ok", false),
+                            mission = json.optString("mission", ""),
+                            rewardedAds = json.optInt("rewarded_ads", 0),
+                            limit = json.optInt("limit", 3),
+                            imageCreditsAdded =
+                                json.optInt(
+                                    "image_credits_added",
+                                    0
+                                ),
+                            audioVideoCreditsAdded =
+                                json.optInt(
+                                    "audio_video_credits_added",
+                                    0
+                                ),
+                            message = json.optString(
+                                "message",
+                                "Reward earned."
+                            )
+                        )
+                    )
+                }
+            } catch (_: Exception) {
+                ApiResult.Failure(
+                    "Unable to claim rewarded-ad gift."
+                )
+            }
+        }
+
+
+    // =========================
+    // USAGE
+    // =========================
+
+    suspend fun verifyGooglePurchase(
+    purchaseToken: String,
+    productId: String
+): ApiResult<GoogleBillingVerificationResponse> =
+    withContext(Dispatchers.IO) {
+        try {
+            val body = JSONObject().apply {
+                put("purchase_token", purchaseToken)
+                put("product_id", productId)
+                put("package_name", "com.novara.app")
+            }
+
+            val request = Request.Builder()
+                .url(BASE_URL + "/api/billing/verify-google")
+                .post(body.toString().toRequestBody(JSON))
+                .build()
+
+            client.newCall(request).execute().use { response ->
+                val text = response.body?.string().orEmpty()
+
+                val json = try {
+                    JSONObject(text)
+                } catch (_: Exception) {
+                    JSONObject()
+                }
+
+                if (!response.isSuccessful) {
+                    return@withContext ApiResult.Failure(
+                        json.optString(
+                            "error",
+                            "Google Play purchase verification failed."
+                        )
+                    )
+                }
+
+                ApiResult.Success(
+                    GoogleBillingVerificationResponse(
+                        ok = json.optBoolean("ok", false),
+                        verified = json.optBoolean("verified", false),
+                        plan = json.optString("plan", null),
+                        productId = json.optString("product_id", null),
+                        expiry = json.optString("expiry", null),
+                        orderId = json.optString("order_id", null)
+                    )
+                )
+            }
+        } catch (_: IOException) {
+            ApiResult.Failure(
+                "Can't reach Novara — check your connection."
+            )
+        } catch (e: Exception) {
+            ApiResult.Failure(
+                e.message ?: "Purchase verification failed."
+            )
+        }
+    }
+
+suspend fun getUsage(): ApiResult<UsageResponse> =
+        withContext(Dispatchers.IO) {
+            try {
+                val request = Request.Builder()
+                    .url(BASE_URL + "/api/usage")
+                    .get()
+                    .build()
+
+                client.newCall(request)
+                    .execute()
+                    .use { response ->
+                        val text =
+                            response.body?.string().orEmpty()
+
+                        if (!response.isSuccessful) {
+                            return@withContext ApiResult.Failure(
+                                errorMessage(response.code, text)
+                            )
+                        }
+
+                        val json =
+                            JSONObject(text)
+
+                        fun item(name: String): UsageItem {
+                            val obj = json.getJSONObject(name)
+                            return UsageItem(
+                                used = obj.optInt("used", 0),
+                                limit = obj.optInt("limit", 0),
+                                remaining = obj.optInt("remaining", 0)
+                            )
+                        }
+
+                        val rewarded =
+                            json.optJSONObject("rewarded_ads")
+                                ?: JSONObject()
+
+                        ApiResult.Success(
+                            UsageResponse(
+                                plan = json.optString(
+                                    "plan",
+                                    "free"
+                                ),
+                                month = json.optString(
+                                    "month",
+                                    null
+                                ),
+                                images = item("images"),
+                                silentVideos = item(
+                                    "silent_videos"
+                                ),
+                                audioVideo = item(
+                                    "audio_video"
+                                ),
+                                rewardedAds =
+                                    RewardedAdsUsage(
+                                        used = rewarded.optInt(
+                                            "used",
+                                            0
+                                        ),
+                                        limit = rewarded.optInt(
+                                            "limit",
+                                            3
+                                        ),
+                                        remaining =
+                                            rewarded.optInt(
+                                                "remaining",
+                                                3
+                                            )
+                                    )
+                            )
+                        )
+                    }
+            } catch (_: IOException) {
+                ApiResult.Failure(
+                    "Can't reach Novara — check your connection."
+                )
+            } catch (_: Exception) {
+                ApiResult.Failure(
+                    "Unable to read usage information."
+                )
+            }
+        }
+
     // =========================
     // AUTH
     // =========================
+
+    suspend fun logout(): ApiResult<Boolean> =
+        withContext(Dispatchers.IO) {
+            try {
+                val request = Request.Builder()
+                    .url(BASE_URL + "/logout")
+                    .get()
+                    .build()
+
+                client.newCall(request)
+                    .execute()
+                    .use { response ->
+                        if (!response.isSuccessful &&
+                            response.code !in 300..399
+                        ) {
+                            return@withContext ApiResult.Failure(
+                                errorMessage(
+                                    response.code,
+                                    response.body?.string().orEmpty()
+                                )
+                            )
+                        }
+
+                        cookieStore.clear()
+                        ApiResult.Success(true)
+                    }
+            } catch (_: IOException) {
+                cookieStore.clear()
+                ApiResult.Failure(
+                    "Can't reach Novara — check your connection."
+                )
+            }
+        }
 
     suspend fun login(
         username: String,
@@ -196,17 +565,29 @@ object ApiClient {
         )
 
     suspend fun signup(
+        firstName: String,
+        lastName: String,
         username: String,
-        password: String
+        email: String,
+        phoneNumber: String,
+        password: String,
+        confirmPassword: String
     ): ApiResult<AuthResponse> =
         postJson(
             "/api/signup",
             JSONObject()
+                .put("first_name", firstName)
+                .put("last_name", lastName)
                 .put("username", username)
+                .put("email", email)
+                .put("phone_number", phoneNumber)
                 .put("password", password)
+                .put("confirm_password", confirmPassword)
         )
 
-    suspend fun guestLogin():
+
+
+suspend fun guestLogin():
         ApiResult<AuthResponse> =
         postJson(
             "/api/guest",
@@ -219,6 +600,38 @@ object ApiClient {
             "/api/accept-terms",
             JSONObject()
         )
+
+    suspend fun getMe(): ApiResult<UserProfile> =
+        withContext(Dispatchers.IO) {
+            try {
+                val request = Request.Builder()
+                    .url(BASE_URL + "/api/me")
+                    .get()
+                    .build()
+
+                client.newCall(request).execute().use { response ->
+                    val text = response.body?.string().orEmpty()
+                    if (!response.isSuccessful) {
+                        return@withContext ApiResult.Failure(
+                            errorMessage(response.code, text)
+                        )
+                    }
+                    val json = JSONObject(text)
+                    ApiResult.Success(
+                        UserProfile(
+                            username = json.optString("username", null.toString()).takeIf { it != "null" },
+                            email = json.optString("email", null.toString()).takeIf { it != "null" },
+                            phoneNumber = json.optString("phone_number", null.toString()).takeIf { it != "null" },
+                            isGuest = json.optBoolean("is_guest", false),
+                            signedInWithGoogle = json.optBoolean("signed_in_with_google", false),
+                            createdAt = json.optString("created_at", null.toString()).takeIf { it != "null" }
+                        )
+                    )
+                }
+            } catch (e: Exception) {
+                ApiResult.Failure(e.message ?: "Network error")
+            }
+        }
 
     suspend fun consumeAuthCode(
         code: String
@@ -285,6 +698,21 @@ object ApiClient {
                 )
             }
         }
+
+    suspend fun verifyEmail(
+        code: String
+    ): ApiResult<AuthResponse> =
+        postJson(
+            "/api/verify-email",
+            JSONObject()
+                .put("code", code)
+        )
+
+    suspend fun resendVerification(): ApiResult<AuthResponse> =
+        postJson(
+            "/api/resend-verification",
+            JSONObject()
+        )
 
     // =========================
     // CHAT
@@ -395,7 +823,13 @@ object ApiClient {
                         }
 
                         val json =
-                            JSONObject(body)
+                            try {
+                                JSONObject(body)
+                            } catch (e: org.json.JSONException) {
+                                return@withContext ApiResult.Failure(
+                                    "Connection issue — please try again."
+                                )
+                            }
 
                         if (!json.has("reply")) {
                             return@withContext ApiResult.Failure(
@@ -480,7 +914,13 @@ object ApiClient {
                         }
 
                         val json =
-                            JSONObject(body)
+                            try {
+                                JSONObject(body)
+                            } catch (e: org.json.JSONException) {
+                                return@withContext ApiResult.Failure(
+                                    "Connection issue — please try again."
+                                )
+                            }
 
                         val array =
                             json.optJSONArray(
@@ -560,7 +1000,13 @@ object ApiClient {
                         }
 
                         val json =
-                            JSONObject(body)
+                            try {
+                                JSONObject(body)
+                            } catch (e: org.json.JSONException) {
+                                return@withContext ApiResult.Failure(
+                                    "Connection issue — please try again."
+                                )
+                            }
 
                         val array =
                             json.optJSONArray(
@@ -925,8 +1371,9 @@ object ApiClient {
     // =========================
 
     suspend fun generateVideo(
-        prompt: String
-    ): ApiResult<String> =
+        prompt: String,
+        videoType: String = "silent"
+    ): ApiResult<VideoResponse> =
         withContext(Dispatchers.IO) {
 
             try {
@@ -942,6 +1389,10 @@ object ApiClient {
                                 .put(
                                     "prompt",
                                     prompt
+                                )
+                                .put(
+                                    "video_type",
+                                    videoType
                                 )
                                 .toString()
                                 .toRequestBody(JSON)
@@ -966,7 +1417,17 @@ object ApiClient {
                             )
                         }
 
-                        ApiResult.Success(body)
+                        val json = JSONObject(body)
+
+                        ApiResult.Success(
+                            VideoResponse(
+                                ok = json.optBoolean("ok", false),
+                                video = json.optString("video", null),
+                                videoUrl = json.optString("video_url", null),
+                                model = json.optString("model", null),
+                                videoType = json.optString("video_type", null)
+                            )
+                        )
                     }
 
             } catch (_: IOException) {
@@ -1101,4 +1562,118 @@ object ApiClient {
     ): String {
         return "$BASE_URL/uploads/$filename"
     }
+
+    // =========================
+    // MEMORY
+    // =========================
+
+    suspend fun getMemories(): ApiResult<List<MemoryItem>> =
+        withContext(Dispatchers.IO) {
+            try {
+                val request = Request.Builder()
+                    .url(BASE_URL + "/api/memories")
+                    .get()
+                    .build()
+
+                client.newCall(request).execute().use { response ->
+                    val text = response.body?.string().orEmpty()
+
+                    if (!response.isSuccessful) {
+                        return@withContext ApiResult.Failure(
+                            errorMessage(response.code, text)
+                        )
+                    }
+
+                    val json = JSONObject(text)
+                    val array = json.optJSONArray("memories")
+                        ?: JSONArray()
+
+                    val memories = buildList {
+                        for (i in 0 until array.length()) {
+                            val item = array.optJSONObject(i) ?: continue
+
+                            add(
+                                MemoryItem(
+                                    id = item.optString("id"),
+                                    content = item.optString("content"),
+                                    source = item.optString(
+                                        "source",
+                                        null
+                                    ).takeIf { it != "null" },
+                                    createdAt = item.optString(
+                                        "created_at",
+                                        null
+                                    ).takeIf { it != "null" }
+                                )
+                            )
+                        }
+                    }
+
+                    ApiResult.Success(memories)
+                }
+            } catch (e: Exception) {
+                ApiResult.Failure(
+                    e.message ?: "Network error"
+                )
+            }
+        }
+
+    suspend fun deleteMemory(
+        memoryId: String
+    ): ApiResult<Boolean> =
+        withContext(Dispatchers.IO) {
+            try {
+                val request = Request.Builder()
+                    .url(
+                        BASE_URL +
+                            "/api/memories/" +
+                            memoryId
+                    )
+                    .delete()
+                    .build()
+
+                client.newCall(request).execute().use { response ->
+                    val text = response.body?.string().orEmpty()
+
+                    if (!response.isSuccessful) {
+                        return@withContext ApiResult.Failure(
+                            errorMessage(response.code, text)
+                        )
+                    }
+
+                    ApiResult.Success(true)
+                }
+            } catch (e: Exception) {
+                ApiResult.Failure(
+                    e.message ?: "Network error"
+                )
+            }
+        }
+
+    suspend fun clearMemories(): ApiResult<Boolean> =
+        withContext(Dispatchers.IO) {
+            try {
+                val request = Request.Builder()
+                    .url(BASE_URL + "/api/memories")
+                    .delete()
+                    .build()
+
+                client.newCall(request).execute().use { response ->
+                    val text = response.body?.string().orEmpty()
+
+                    if (!response.isSuccessful) {
+                        return@withContext ApiResult.Failure(
+                            errorMessage(response.code, text)
+                        )
+                    }
+
+                    ApiResult.Success(true)
+                }
+            } catch (e: Exception) {
+                ApiResult.Failure(
+                    e.message ?: "Network error"
+                )
+            }
+        }
+
 }
